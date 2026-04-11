@@ -287,46 +287,42 @@ return view.extend({
         o.rawhtml = true;
         o.default = [
             '<div style="max-width:480px">',
-            '<div style="border:1px solid rgba(0,0,0,0.1);border-radius:12px;padding:24px 28px;background:var(--color-bg-1,#fff)">',
 
-            '<h4 style="margin:0 0 4px;font-size:16px;font-weight:700">AW1000 LED Status</h4>',
-            '<p style="margin:0 0 20px;color:#888;font-size:13px">LED controller for the Arcadyan AW1000 router on OpenWrt.</p>',
-
-            '<hr style="border:none;border-top:1px solid rgba(0,0,0,0.08);margin:0 0 16px">',
+            '<h5 style="margin:0 0 4px">AW1000 LED Status</h5>',
+            '<p style="color:#888;font-size:12px;margin:0 0 16px">LED controller for the Arcadyan AW1000 router on OpenWrt.</p>',
 
             '<table style="width:100%;border-collapse:collapse;font-size:13px">',
 
             '<tr style="border-bottom:1px solid rgba(0,0,0,0.06)">',
-            '<td style="padding:9px 0;color:#888;width:120px">Version</td>',
-            '<td style="padding:9px 0;font-weight:600">1.0.0</td>',
+            '<td style="padding:8px 0;color:#888;width:130px">Version</td>',
+            '<td style="padding:8px 0;font-weight:600">1.0.0</td>',
             '</tr>',
 
             '<tr style="border-bottom:1px solid rgba(0,0,0,0.06)">',
-            '<td style="padding:9px 0;color:#888">Developer</td>',
-            '<td style="padding:9px 0;font-weight:600">NoobLk</td>',
+            '<td style="padding:8px 0;color:#888">Developer</td>',
+            '<td style="padding:8px 0;font-weight:600">NoobLk</td>',
             '</tr>',
 
             '<tr style="border-bottom:1px solid rgba(0,0,0,0.06)">',
-            '<td style="padding:9px 0;color:#888">Repository</td>',
-            '<td style="padding:9px 0"><a href="https://github.com/nooblk-98/luci-app-aw1k-led" target="_blank" style="color:#5e72e4;text-decoration:none">github.com/nooblk-98/luci-app-aw1k-led</a></td>',
+            '<td style="padding:8px 0;color:#888">Repository</td>',
+            '<td style="padding:8px 0"><a href="https://github.com/nooblk-98/luci-app-aw1k-led" target="_blank" style="color:#5e72e4;text-decoration:none">github.com/nooblk-98/luci-app-aw1k-led</a></td>',
             '</tr>',
 
             '<tr style="border-bottom:1px solid rgba(0,0,0,0.06)">',
-            '<td style="padding:9px 0;color:#888">Issues / Support</td>',
-            '<td style="padding:9px 0"><a href="https://github.com/nooblk-98/luci-app-aw1k-led/issues" target="_blank" style="color:#5e72e4;text-decoration:none">Open an issue</a></td>',
+            '<td style="padding:8px 0;color:#888">Issues / Support</td>',
+            '<td style="padding:8px 0"><a href="https://github.com/nooblk-98/luci-app-aw1k-led/issues" target="_blank" style="color:#5e72e4;text-decoration:none">Open an issue</a></td>',
             '</tr>',
 
             '<tr>',
-            '<td style="padding:9px 0;color:#888">License</td>',
-            '<td style="padding:9px 0">GPL-3.0-or-later</td>',
+            '<td style="padding:8px 0;color:#888">License</td>',
+            '<td style="padding:8px 0">GPL-3.0-or-later</td>',
             '</tr>',
 
             '</table>',
 
-            '<hr style="border:none;border-top:1px solid rgba(0,0,0,0.08);margin:20px 0 14px">',
-            '<p style="margin:0;text-align:center;color:#bbb;font-size:12px">Made with ♥ for the OpenWrt community</p>',
+            '<p style="margin:20px 0 0;color:#bbb;font-size:12px">Made with ♥ for the OpenWrt community</p>',
 
-            '</div></div>'
+            '</div>'
         ].join('');
 
         /* ════════════════════════════════════════════════════════════════════
