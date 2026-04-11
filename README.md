@@ -4,7 +4,7 @@ LED Status Controller for the **Arcadyan AW1000** router running OpenWrt.
 
 Controls the router's RGB LEDs based on live 5G signal quality and mobile internet status — with a built-in Night Mode that silences all LEDs on a schedule.
 
-> ⚠️ **This package only works on the Arcadyan AW1000 router.**
+> **This package only works on the Arcadyan AW1000 router.**
 
 ---
 
