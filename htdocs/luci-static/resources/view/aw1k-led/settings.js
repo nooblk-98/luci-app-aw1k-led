@@ -149,181 +149,110 @@ return view.extend({
 
         /* ══════════════════════════════════════════════════════════════════
          * TAB: LED Colors
-         * Each signal level for 5G and Signal gets a color picker.
-         * We store the color id in UCI, the shell script reads it.
+         * Rendered entirely as DummyValue HTML — save/preview via dedicated
+         * controller endpoints so LuCI form machinery is not involved at all.
          * ══════════════════════════════════════════════════════════════════ */
 
-        /* Helper: build a color picker DummyValue for one level */
-        function makeColorPicker(tabName, uciKey, label, desc, defaultColor) {
-            var opt = s.taboption(tabName, form.DummyValue, '_cp_' + uciKey, label, desc);
-            opt.rawhtml = true;
+        /* Build one swatch-picker row and return HTML string */
+        function pickerRow(uciKey, label, desc, currentColor) {
+            var swatches = COLORS.map(function(c) {
+                var sel = c.id === currentColor
+                    ? 'outline:3px solid #5e72e4;outline-offset:2px;transform:scale(1.18);z-index:1;'
+                    : '';
+                return '<span data-key="' + uciKey + '" data-color="' + c.id + '" title="' + c.label + '" ' +
+                    'onclick="awLkPick(this)" ' +
+                    'style="display:inline-block;width:30px;height:30px;border-radius:50%;cursor:pointer;' +
+                    'background:' + c.hex + ';border:2px solid rgba(0,0,0,0.18);position:relative;' +
+                    'transition:transform .12s,outline .12s;' + sel + '"></span>';
+            }).join('');
 
-            /* We need current value at render time — read from uci object */
-            opt.renderWidget = function(section_id) {
-                var current = uci.get('ledstatus', section_id, uciKey) || defaultColor;
-                var swatches = COLORS.map(function(c) {
-                    var sel = (c.id === current) ? 'outline:3px solid #5e72e4;outline-offset:2px;transform:scale(1.15);' : '';
-                    return '<span data-color="' + c.id + '" title="' + c.label + '" ' +
-                        'style="display:inline-block;width:28px;height:28px;border-radius:50%;' +
-                        'background:' + c.hex + ';cursor:pointer;border:2px solid #0003;' +
-                        'transition:transform .15s;' + sel + '" ' +
-                        'onclick="awLkPickColor(this,\'' + uciKey + '\',\'' + section_id + '\')"></span>';
-                }).join(' ');
-
-                /* Live preview swatch */
-                var previewHex = colorById(current).hex;
-                return E('div', { style: 'margin:4px 0 12px' }, [
-                    E('div', { style: 'display:flex;align-items:center;gap:10px;flex-wrap:wrap' }, [
-                        E('div', { 'data-preview': uciKey,
-                            style: 'width:36px;height:36px;border-radius:8px;border:2px solid #0003;' +
-                                   'background:' + previewHex + ';flex-shrink:0' }),
-                        E('div', { style: 'display:flex;gap:6px;flex-wrap:wrap' },
-                            COLORS.map(function(c) {
-                                var sel = (c.id === current)
-                                    ? 'outline:3px solid #5e72e4;outline-offset:2px;transform:scale(1.15);'
-                                    : '';
-                                return E('span', {
-                                    'data-color': c.id,
-                                    title: c.label,
-                                    style: 'display:inline-block;width:28px;height:28px;border-radius:50%;' +
-                                           'background:' + c.hex + ';cursor:pointer;border:2px solid #0003;' +
-                                           'transition:transform .15s;' + sel,
-                                    click: function(ev) {
-                                        awLkPickColor(ev.currentTarget, uciKey, section_id);
-                                    }
-                                });
-                            })
-                        ),
-                        E('span', { 'data-label': uciKey,
-                            style: 'font-size:13px;color:#888' },
-                            colorById(current).label)
-                    ])
-                ]);
-            };
-            /* No value to save directly — saving done via hidden input populated by JS */
-            opt.write = function() {};
-            return opt;
+            return '<tr><td style="padding:6px 14px 6px 0;white-space:nowrap;font-size:13px;vertical-align:middle">' +
+                '<b>' + label + '</b>' +
+                (desc ? '<br><span style="color:#999;font-size:11px">' + desc + '</span>' : '') +
+                '</td><td style="padding:6px 0;vertical-align:middle">' +
+                '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+                '<div id="aw1k-prev-' + uciKey + '" style="width:36px;height:36px;border-radius:8px;' +
+                'flex-shrink:0;border:2px solid rgba(0,0,0,0.15);background:' + colorById(currentColor).hex + '"></div>' +
+                '<div style="display:flex;gap:5px;flex-wrap:wrap">' + swatches + '</div>' +
+                '<span id="aw1k-lbl-' + uciKey + '" style="font-size:13px;color:#888;min-width:52px">' +
+                colorById(currentColor).label + '</span>' +
+                '</div></td></tr>';
         }
 
-        /* ── 5G color section ─────────────────────────────────────────────── */
-        o = s.taboption('colors', form.DummyValue, '_5g_color_hdr', '');
+        /* Whole colors tab is one DummyValue block — reads UCI for current values */
+        o = s.taboption('colors', form.DummyValue, '_colors_ui', '');
         o.rawhtml = true;
-        o.default = '<h5 style="margin:0 0 2px">5G SINR LED colors</h5>' +
-                    '<p style="color:#888;font-size:12px;margin:0 0 14px">' +
-                    'Choose the color shown on the 5G LED (red:5g + green:5g + blue:5g) for each signal quality level. ' +
-                    'All 7 physical mix colors are available.</p>';
 
-        /* Color pickers — Value field with custom renderWidget + formvalue override */
-        function addColorSelect(tabName, uciKey, label, desc, defaultColor) {
-            var o2 = s.taboption(tabName, form.Value, uciKey, label, desc);
-            o2.default  = defaultColor;
-            o2.rmempty  = false;
+        /* renderWidget called at render time so uci is already loaded */
+        o.renderWidget = function(section_id) {
+            var g = function(k, d) { return uci.get('ledstatus', section_id, k) || d; };
 
-            /* Render swatches + a visible hidden <input> that LuCI reads via formvalue() */
-            o2.renderWidget = function(section_id, option_index, cfgvalue) {
-                var current  = cfgvalue || defaultColor;
-                var inputId  = 'aw1k-inp-' + uciKey + '-' + section_id;
+            var html = [
+                '<div style="max-width:680px">',
 
-                var swatchEls = COLORS.map(function(c) {
-                    var isSel = (c.id === current);
-                    return E('span', {
-                        'data-color': c.id,
-                        title: c.label,
-                        style: 'display:inline-block;width:30px;height:30px;border-radius:50%;' +
-                               'background:' + c.hex + ';cursor:pointer;' +
-                               'border:2px solid rgba(0,0,0,0.15);' +
-                               'transition:transform .15s,outline .15s;' +
-                               (isSel ? 'outline:3px solid #5e72e4;outline-offset:2px;transform:scale(1.15);' : ''),
-                        click: function(ev) {
-                            var el     = ev.currentTarget;
-                            var row    = el.closest('.aw1k-color-row');
-                            /* deselect all swatches */
-                            row.querySelectorAll('[data-color]').forEach(function(sw) {
-                                sw.style.outline       = '';
-                                sw.style.outlineOffset = '';
-                                sw.style.transform     = '';
-                            });
-                            el.style.outline       = '3px solid #5e72e4';
-                            el.style.outlineOffset = '2px';
-                            el.style.transform     = 'scale(1.15)';
-                            /* update preview square + label */
-                            var cdata = colorById(el.dataset.color);
-                            row.querySelector('.aw1k-preview').style.background = cdata.hex;
-                            row.querySelector('.aw1k-clabel').textContent       = cdata.label;
-                            /* write value into the real input so LuCI formvalue() picks it up */
-                            var inp = row.querySelector('input.aw1k-value');
-                            inp.value = el.dataset.color;
-                            inp.dispatchEvent(new Event('input', { bubbles: true }));
-                        }
-                    });
-                });
+                /* ── 5G ── */
+                '<h5 style="margin:0 0 2px">5G SINR LED colors</h5>',
+                '<p style="color:#888;font-size:12px;margin:0 0 10px">',
+                'Red:5g + Green:5g + Blue:5g — all 8 colors (7 mixes + off) available.',
+                '</p>',
+                '<table style="border-collapse:collapse;width:100%">',
+                pickerRow('color_5g_excellent', '5G Excellent', 'SINR ≥ excellent threshold', g('color_5g_excellent','green')),
+                pickerRow('color_5g_good',      '5G Good',      'SINR ≥ good threshold',      g('color_5g_good','blue')),
+                pickerRow('color_5g_average',   '5G Average',   'SINR ≥ average threshold',   g('color_5g_average','yellow')),
+                pickerRow('color_5g_poor',      '5G Poor',      'SINR below average — blinks', g('color_5g_poor','magenta')),
+                pickerRow('color_5g_none',      '5G No signal', 'No NR5G cell found',          g('color_5g_none','red')),
+                '</table>',
 
-                /* Real <input> — visible to LuCI's formvalue() by id/name */
-                var inputEl = E('input', {
-                    id:    inputId,
-                    name:  uciKey,
-                    type:  'text',
-                    'class': 'aw1k-value',
-                    value: current,
-                    style: 'position:absolute;opacity:0;pointer-events:none;width:1px;height:1px'
-                });
+                /* ── Signal ── */
+                '<h5 style="margin:16px 0 2px">Signal (CSQ) LED colors</h5>',
+                '<p style="color:#888;font-size:12px;margin:0 0 10px">',
+                'Red:signal + Green:signal + Blue:signal.',
+                '</p>',
+                '<table style="border-collapse:collapse;width:100%">',
+                pickerRow('color_sig_excellent', 'Signal Excellent', 'CSQ ≥ excellent threshold',    g('color_sig_excellent','green')),
+                pickerRow('color_sig_good',      'Signal Good',      'CSQ ≥ good threshold',         g('color_sig_good','blue')),
+                pickerRow('color_sig_average',   'Signal Average',   'CSQ ≥ average threshold',      g('color_sig_average','yellow')),
+                pickerRow('color_sig_weak',      'Signal Weak',      'CSQ below average — blinks',   g('color_sig_weak','red')),
+                pickerRow('color_sig_offline',   'Signal Offline',   'Internet disconnected',         g('color_sig_offline','magenta')),
+                '</table>',
 
-                return E('div', { 'class': 'aw1k-color-row', style: 'margin:2px 0 14px;position:relative' }, [
-                    E('div', { style: 'display:flex;align-items:center;gap:10px;flex-wrap:wrap' }, [
-                        E('div', {
-                            'class': 'aw1k-preview',
-                            style: 'width:38px;height:38px;border-radius:8px;flex-shrink:0;' +
-                                   'border:2px solid rgba(0,0,0,0.15);background:' + colorById(current).hex
-                        }),
-                        E('div', { style: 'display:flex;gap:6px;flex-wrap:wrap' }, swatchEls),
-                        E('span', { 'class': 'aw1k-clabel', style: 'font-size:13px;color:#888;min-width:54px' },
-                            colorById(current).label)
-                    ]),
-                    inputEl
-                ]);
-            };
+                /* ── Buttons ── */
+                '<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">',
+                '<button type="button" class="btn cbi-button cbi-button-action" id="aw1k-color-save-btn">💾 Save Colors</button>',
+                '<button type="button" class="btn cbi-button cbi-button-action" id="aw1k-color-preview-btn">👁 Preview on LEDs</button>',
+                '<button type="button" class="btn cbi-button cbi-button-reset"  id="aw1k-color-restore-btn">↺ Restore service</button>',
+                '</div>',
+                '<div id="aw1k-color-status" style="font-size:13px;margin-top:8px;min-height:20px;color:#888"></div>',
+                '</div>',
 
-            /* Tell LuCI to read the value from our hidden input.
-             * Must use the unique id (uciKey + section_id) to avoid
-             * querySelector returning the first picker on the page. */
-            o2.formvalue = function(section_id) {
-                var inp = document.getElementById('aw1k-inp-' + uciKey + '-' + section_id);
-                return (inp && inp.value) ? inp.value : (uci.get('ledstatus', section_id, uciKey) || defaultColor);
-            };
+                /* global onclick handler injected once */
+                '<script>',
+                'function awLkPick(el){',
+                '  var key=el.dataset.key;',
+                '  document.querySelectorAll("[data-key=\'"+key+"\']").forEach(function(s){',
+                '    s.style.outline="";s.style.outlineOffset="";s.style.transform="";',
+                '  });',
+                '  el.style.outline="3px solid #5e72e4";',
+                '  el.style.outlineOffset="2px";',
+                '  el.style.transform="scale(1.18)";',
+                '  var hex=el.style.background;',
+                /* map hex back via COLORS lookup via data-color */
+                '  var colorId=el.dataset.color;',
+                '  var previewColors={"off":"#222222","red":"#ff3030","green":"#22dd44","blue":"#3399ff",',
+                '    "yellow":"#ffdd00","cyan":"#00eedd","magenta":"#dd44ff","white":"#ffffff"};',
+                '  var p=document.getElementById("aw1k-prev-"+key);',
+                '  if(p)p.style.background=previewColors[colorId]||hex;',
+                '  var l=document.getElementById("aw1k-lbl-"+key);',
+                '  var labels={"off":"Off","red":"Red","green":"Green","blue":"Blue",',
+                '    "yellow":"Yellow","cyan":"Cyan","magenta":"Magenta","white":"White"};',
+                '  if(l)l.textContent=labels[colorId]||colorId;',
+                '}',
+                '</script>'
+            ].join('');
 
-            return o2;
-        }
-
-        addColorSelect('colors', 'color_5g_excellent', _('5G Excellent color'), _('Color when SINR is excellent'), 'green');
-        addColorSelect('colors', 'color_5g_good',      _('5G Good color'),      _('Color when SINR is good'),      'blue');
-        addColorSelect('colors', 'color_5g_average',   _('5G Average color'),   _('Color when SINR is average'),   'yellow');
-        addColorSelect('colors', 'color_5g_poor',      _('5G Poor color'),      _('Color when SINR is poor — will blink'), 'magenta');
-        addColorSelect('colors', 'color_5g_none',      _('5G No signal color'), _('Color when no 5G signal'),      'red');
-
-        o = s.taboption('colors', form.DummyValue, '_sig_color_hdr', '');
-        o.rawhtml = true;
-        o.default = '<h5 style="margin:8px 0 2px">Signal (CSQ) LED colors</h5>' +
-                    '<p style="color:#888;font-size:12px;margin:0 0 14px">' +
-                    'Choose the color shown on the Signal LED (red:signal + green:signal + blue:signal) for each CSQ level.</p>';
-
-        addColorSelect('colors', 'color_sig_excellent', _('Signal Excellent color'), _('Color when CSQ is excellent'), 'green');
-        addColorSelect('colors', 'color_sig_good',      _('Signal Good color'),      _('Color when CSQ is good'),      'blue');
-        addColorSelect('colors', 'color_sig_average',   _('Signal Average color'),   _('Color when CSQ is average'),   'yellow');
-        addColorSelect('colors', 'color_sig_weak',      _('Signal Weak color'),      _('Color when CSQ is weak — will blink'), 'red');
-        addColorSelect('colors', 'color_sig_offline',   _('Signal Offline color'),   _('Color when internet is disconnected'), 'magenta');
-
-        /* Live preview button */
-        o = s.taboption('colors', form.DummyValue, '_color_preview_btn', '');
-        o.rawhtml = true;
-        o.default = [
-            '<div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap">',
-            '<button type="button" class="btn cbi-button cbi-button-action" id="aw1k-color-preview-btn">',
-            '👁 ' + _('Preview on LEDs') + '</button>',
-            '<button type="button" class="btn cbi-button cbi-button-reset" id="aw1k-color-restore-btn">',
-            '↺ ' + _('Restore service') + '</button>',
-            '</div>',
-            '<div id="aw1k-color-preview-status" style="font-size:13px;margin-top:6px;color:#888"></div>'
-        ].join('');
+            return E('div', { innerHTML: html });
+        };
+        o.write = function() {}; /* never save this dummy through LuCI */
 
         /* ══════════════════════════════════════════════════════════════════
          * TAB: Night Mode
@@ -446,60 +375,67 @@ return view.extend({
                 });
             }
 
-            /* ── Color preview button ── */
-            var colorPreviewBtn  = node.querySelector('#aw1k-color-preview-btn');
-            var colorRestoreBtn  = node.querySelector('#aw1k-color-restore-btn');
-            var colorPreviewSt   = node.querySelector('#aw1k-color-preview-status');
+            /* ── Color tab: Save / Preview / Restore ── */
+            var colorSaveBtn    = node.querySelector('#aw1k-color-save-btn');
+            var colorPreviewBtn = node.querySelector('#aw1k-color-preview-btn');
+            var colorRestoreBtn = node.querySelector('#aw1k-color-restore-btn');
+            var colorStatus     = node.querySelector('#aw1k-color-status');
 
-            /* Read current value from the hidden input — use unique id to avoid
-             * querySelector matching the wrong picker when multiple share the same name */
-            function getCurrentColorId(uciKey) {
-                var inp = node.querySelector('#aw1k-inp-' + uciKey + '-settings');
-                if (inp && inp.value) return inp.value;
-                return uci.get('ledstatus', 'settings', uciKey) || 'green';
+            var COLOR_KEYS = [
+                'color_5g_excellent','color_5g_good','color_5g_average','color_5g_poor','color_5g_none',
+                'color_sig_excellent','color_sig_good','color_sig_average','color_sig_weak','color_sig_offline'
+            ];
+
+            /* Read selected color from the outlined swatch for a given uciKey */
+            function getPickedColor(uciKey) {
+                /* The selected swatch has transform:scale(1.18) in its style */
+                var sel = node.querySelector('[data-key="' + uciKey + '"][style*="scale"]');
+                return sel ? sel.dataset.color : (uci.get('ledstatus', 'settings', uciKey) || 'green');
             }
 
+            function setColorStatus(msg, color) {
+                if (colorStatus) { colorStatus.textContent = msg; colorStatus.style.color = color || '#888'; }
+            }
+
+            /* Save all 10 colors via dedicated controller endpoint */
+            if (colorSaveBtn) {
+                colorSaveBtn.addEventListener('click', function() {
+                    colorSaveBtn.disabled = true;
+                    setColorStatus('Saving colors…', '#888');
+                    var body = COLOR_KEYS.map(function(k) {
+                        return encodeURIComponent(k) + '=' + encodeURIComponent(getPickedColor(k));
+                    }).join('&');
+                    fetch('/cgi-bin/luci/admin/system/aw1k-led/save_colors', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: body
+                    })
+                    .then(function() { setColorStatus('Colors saved. LED service restarted.', '#2dce89'); })
+                    .catch(function(e) { setColorStatus('Error: ' + e.message, '#f5365c'); })
+                    .finally(function() { colorSaveBtn.disabled = false; });
+                });
+            }
+
+            /* Preview: stop service, light up Excellent color on both groups at once */
             if (colorPreviewBtn) {
                 colorPreviewBtn.addEventListener('click', function() {
                     colorPreviewBtn.disabled = true;
-                    colorPreviewSt.textContent = _('Stopping service and previewing all levels…');
-                    colorPreviewSt.style.color = '#888';
-
-                    /* Build one command that sets all color levels at once */
-                    var levels5g = [
-                        { key: 'color_5g_excellent', blink: false },
-                        { key: 'color_5g_good',      blink: false },
-                        { key: 'color_5g_average',   blink: false },
-                        { key: 'color_5g_poor',      blink: true  },
-                        { key: 'color_5g_none',      blink: false }
-                    ];
-                    var levelsSig = [
-                        { key: 'color_sig_excellent', blink: false },
-                        { key: 'color_sig_good',      blink: false },
-                        { key: 'color_sig_average',   blink: false },
-                        { key: 'color_sig_weak',      blink: true  },
-                        { key: 'color_sig_offline',   blink: false }
-                    ];
-
-                    /* Show Excellent level for both groups simultaneously */
-                    var c5g  = getCurrentColorId('color_5g_excellent');
-                    var csig = getCurrentColorId('color_sig_excellent');
-                    var previewCmd = colorCmd('5g', c5g, false) + '; ' + colorCmd('signal', csig, false);
-
+                    setColorStatus('Stopping service and previewing…', '#888');
+                    var c5g  = getPickedColor('color_5g_excellent');
+                    var csig = getPickedColor('color_sig_excellent');
+                    /* both groups in one shell call — no clearing between them */
+                    var cmd  = colorCmd('5g', c5g, false) + '; ' + colorCmd('signal', csig, false);
                     runCmd('/etc/init.d/ledstatus stop')
                         .then(function() { return delay(300); })
-                        .then(function() { return runCmd(previewCmd); })
+                        .then(function() { return runCmd(cmd); })
                         .then(function() {
-                            colorPreviewSt.textContent =
-                                '5G=' + colorById(c5g).label +
-                                '  |  Signal=' + colorById(csig).label +
-                                '  — showing Excellent level. Click "Restore service" when done.';
-                            colorPreviewSt.style.color = '#5e72e4';
+                            setColorStatus(
+                                '5G → ' + colorById(c5g).label + '   |   Signal → ' + colorById(csig).label +
+                                '   (Excellent level). Click "Restore service" when done.',
+                                '#5e72e4'
+                            );
                         })
-                        .catch(function(e) {
-                            colorPreviewSt.textContent = _('Error: ') + e.message;
-                            colorPreviewSt.style.color = '#f5365c';
-                        })
+                        .catch(function(e) { setColorStatus('Error: ' + e.message, '#f5365c'); })
                         .finally(function() { colorPreviewBtn.disabled = false; });
                 });
             }
@@ -508,10 +444,7 @@ return view.extend({
                 colorRestoreBtn.addEventListener('click', function() {
                     colorRestoreBtn.disabled = true;
                     runCmd('/etc/init.d/ledstatus start')
-                        .then(function() {
-                            colorPreviewSt.textContent = _('Service restored.');
-                            colorPreviewSt.style.color = '#2dce89';
-                        })
+                        .then(function() { setColorStatus('Service restored.', '#2dce89'); })
                         .finally(function() { colorRestoreBtn.disabled = false; });
                 });
             }
