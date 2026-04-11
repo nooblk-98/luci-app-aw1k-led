@@ -12,3 +12,8 @@ config ledstatus 'settings'
 	option csq_excellent '20'
 	option csq_good '14'
 	option csq_average '10'
+
+	# Night Mode
+	option night_enabled '0'
+	option night_start '22:00'
+	option night_end '06:00'

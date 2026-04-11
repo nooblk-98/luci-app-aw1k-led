@@ -25,6 +25,7 @@ define Package/$(PKG_NAME)/install
 
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) ./root/usr/bin/led-status-check.sh $(1)/usr/bin/led-status-check.sh
+	$(INSTALL_BIN) ./root/usr/bin/led-night-mode.sh $(1)/usr/bin/led-night-mode.sh
 	$(INSTALL_BIN) ./root/usr/bin/led-status-check-daemon.sh $(1)/usr/bin/led-status-check-daemon.sh
 
 	$(INSTALL_DIR) $(1)/usr/share/luci/menu.d
