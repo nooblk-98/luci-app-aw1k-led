@@ -283,10 +283,12 @@ return view.extend({
                 ]);
             };
 
-            /* Tell LuCI to read the value from our hidden input */
+            /* Tell LuCI to read the value from our hidden input.
+             * Must use the unique id (uciKey + section_id) to avoid
+             * querySelector returning the first picker on the page. */
             o2.formvalue = function(section_id) {
-                var row = document.querySelector('.aw1k-color-row input[name="' + uciKey + '"]');
-                return row ? row.value : (uci.get('ledstatus', section_id, uciKey) || defaultColor);
+                var inp = document.getElementById('aw1k-inp-' + uciKey + '-' + section_id);
+                return (inp && inp.value) ? inp.value : (uci.get('ledstatus', section_id, uciKey) || defaultColor);
             };
 
             return o2;
@@ -449,9 +451,10 @@ return view.extend({
             var colorRestoreBtn  = node.querySelector('#aw1k-color-restore-btn');
             var colorPreviewSt   = node.querySelector('#aw1k-color-preview-status');
 
-            /* Read current value from the hidden input LuCI uses */
+            /* Read current value from the hidden input — use unique id to avoid
+             * querySelector matching the wrong picker when multiple share the same name */
             function getCurrentColorId(uciKey) {
-                var inp = node.querySelector('input.aw1k-value[name="' + uciKey + '"]');
+                var inp = node.querySelector('#aw1k-inp-' + uciKey + '-settings');
                 if (inp && inp.value) return inp.value;
                 return uci.get('ledstatus', 'settings', uciKey) || 'green';
             }
