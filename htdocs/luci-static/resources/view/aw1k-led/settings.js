@@ -86,7 +86,6 @@ return view.extend({
         s.tab('thresholds', _('Thresholds'));
         s.tab('colors',     _('LED Colors'));
         s.tab('nightmode',  _('Night Mode'));
-        s.tab('test',       _('LED Test'));
 
         /* ══════════════════════════════════════════════════════════════════
          * TAB: General
@@ -221,8 +220,6 @@ return view.extend({
 
                 '<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">',
                 '<button type="button" class="btn cbi-button cbi-button-action" id="aw1k-color-save-btn">💾 Save Colors</button>',
-                '<button type="button" class="btn cbi-button cbi-button-action" id="aw1k-color-preview-btn">👁 Preview on LEDs</button>',
-                '<button type="button" class="btn cbi-button cbi-button-reset"  id="aw1k-color-restore-btn">↺ Restore service</button>',
                 '</div>',
                 '<div id="aw1k-color-status" style="font-size:13px;margin-top:8px;min-height:20px;color:#888"></div>',
                 '</div>'
@@ -271,8 +268,8 @@ return view.extend({
             '<b>' + _('Night Mode behaviour') + '</b><br>',
             '<ul style="margin:6px 0 0 16px;padding:0">',
             '<li>' + _('All status LEDs (5G, Internet, WiFi, Signal) → OFF') + '</li>',
-            '<li>' + _('green:power → stays ON (unchanged)') + '</li>',
-            '<li>' + _('green:phone → slow airplane-style blink (timer, 1500 ms on / 1500 ms off)') + '</li>',
+            '<li>' + _('green:power → heartbeat double-pulse (two quick flashes then pause, like airplane tail beacon)') + '</li>',
+            '<li>' + _('green:phone → OFF') + '</li>',
             '<li>' + _('ledstatus service is stopped during night window and restarted at end time') + '</li>',
             '</ul></div>',
             '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">',
@@ -280,38 +277,6 @@ return view.extend({
             '<button type="button" class="btn cbi-button cbi-button-reset" id="aw1k-night-off-btn">☀️ ' + _('Test Night Mode OFF') + '</button>',
             '</div>',
             '<div id="aw1k-night-status" style="font-size:13px;min-height:20px;color:#888"></div>'
-        ].join('');
-
-        /* ══════════════════════════════════════════════════════════════════
-         * TAB: LED Test
-         * ══════════════════════════════════════════════════════════════════ */
-        o = s.taboption('test', form.DummyValue, '_test_ui', '');
-        o.rawhtml = true;
-        o.default = [
-            '<div style="max-width:560px">',
-            '<h5 style="margin:0 0 8px">AW1000 LED Map</h5>',
-            '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:20px">',
-            '<thead><tr style="background:var(--color-bg-2,#f4f4f4)">',
-            '<th style="padding:6px 10px;text-align:left">LED</th>',
-            '<th style="padding:6px 10px;text-align:left">sysfs name</th>',
-            '<th style="padding:6px 10px;text-align:left">Used for</th>',
-            '</tr></thead><tbody>',
-            '<tr><td style="padding:5px 10px">🟢🔵🔴</td><td style="padding:5px 10px;font-family:monospace">*:5g</td><td style="padding:5px 10px">5G quality (RGB mix)</td></tr>',
-            '<tr style="background:var(--color-bg-2,#f9f9f9)"><td style="padding:5px 10px">🟢</td><td style="padding:5px 10px;font-family:monospace">green:internet</td><td style="padding:5px 10px">Internet connected</td></tr>',
-            '<tr><td style="padding:5px 10px">🟢</td><td style="padding:5px 10px;font-family:monospace">green:wifi</td><td style="padding:5px 10px">WiFi enabled</td></tr>',
-            '<tr style="background:var(--color-bg-2,#f9f9f9)"><td style="padding:5px 10px">🟢🔵🔴</td><td style="padding:5px 10px;font-family:monospace">*:signal</td><td style="padding:5px 10px">Signal quality (RGB mix)</td></tr>',
-            '</tbody></table>',
-            '<div id="aw1k-test-status" style="min-height:22px;margin-bottom:14px;font-size:13px;color:#888"></div>',
-            '<div style="background:var(--color-bg-2,#eee);border-radius:6px;height:8px;margin-bottom:18px;overflow:hidden">',
-            '<div id="aw1k-test-bar" style="height:8px;border-radius:6px;background:#5e72e4;width:0%;transition:width 0.4s"></div>',
-            '</div>',
-            '<div style="display:flex;gap:10px;flex-wrap:wrap">',
-            '<button type="button" class="btn cbi-button cbi-button-action" id="aw1k-test-btn">▶ ' + _('Run LED Test') + '</button>',
-            '<button type="button" class="btn cbi-button cbi-button-reset" id="aw1k-test-stop" disabled>■ ' + _('Stop') + '</button>',
-            '</div>',
-            '<p style="margin-top:14px;color:#aaa;font-size:12px">',
-            _('Cycles every color on both the 5G and Signal LED groups (all 7 mixes). Power LED is untouched.'),
-            '</p></div>'
         ].join('');
 
         /* ════════════════════════════════════════════════════════════════════
@@ -366,10 +331,8 @@ return view.extend({
             }
 
             /* ── Color tab: Save / Preview / Restore ── */
-            var colorSaveBtn    = node.querySelector('#aw1k-color-save-btn');
-            var colorPreviewBtn = node.querySelector('#aw1k-color-preview-btn');
-            var colorRestoreBtn = node.querySelector('#aw1k-color-restore-btn');
-            var colorStatus     = node.querySelector('#aw1k-color-status');
+            var colorSaveBtn = node.querySelector('#aw1k-color-save-btn');
+            var colorStatus  = node.querySelector('#aw1k-color-status');
 
             var COLOR_KEYS = [
                 'color_5g_excellent','color_5g_good','color_5g_average','color_5g_poor','color_5g_none',
@@ -406,65 +369,19 @@ return view.extend({
                 });
             }
 
-            /* Preview: stop service, light up Excellent color on both groups at once */
-            if (colorPreviewBtn) {
-                colorPreviewBtn.addEventListener('click', function() {
-                    colorPreviewBtn.disabled = true;
-                    setColorStatus('Stopping service and previewing…', '#888');
-                    var c5g  = getPickedColor('color_5g_excellent');
-                    var csig = getPickedColor('color_sig_excellent');
-                    /* both groups in one shell call — no clearing between them */
-                    var cmd  = colorCmd('5g', c5g, false) + '; ' + colorCmd('signal', csig, false);
-                    runCmd('/etc/init.d/ledstatus stop')
-                        .then(function() { return delay(300); })
-                        .then(function() { return runCmd(cmd); })
-                        .then(function() {
-                            setColorStatus(
-                                '5G → ' + colorById(c5g).label + '   |   Signal → ' + colorById(csig).label +
-                                '   (Excellent level). Click "Restore service" when done.',
-                                '#5e72e4'
-                            );
-                        })
-                        .catch(function(e) { setColorStatus('Error: ' + e.message, '#f5365c'); })
-                        .finally(function() { colorPreviewBtn.disabled = false; });
-                });
-            }
-
-            if (colorRestoreBtn) {
-                colorRestoreBtn.addEventListener('click', function() {
-                    colorRestoreBtn.disabled = true;
-                    runCmd('/etc/init.d/ledstatus start')
-                        .then(function() { setColorStatus('Service restored.', '#2dce89'); })
-                        .finally(function() { colorRestoreBtn.disabled = false; });
-                });
-            }
-
             /* ── Night Mode buttons ── */
             var nightOnBtn  = node.querySelector('#aw1k-night-on-btn');
             var nightOffBtn = node.querySelector('#aw1k-night-off-btn');
             var nightStatus = node.querySelector('#aw1k-night-status');
-            var STATUS_LEDS = ['green:5g','blue:5g','red:5g','green:internet','green:wifi','green:signal','blue:signal','red:signal'];
-
-            function nightOnCmd() {
-                var cmds = STATUS_LEDS.map(function(l) {
-                    return 'echo none > /sys/class/leds/' + l + '/trigger; echo 0 > /sys/class/leds/' + l + '/brightness';
-                });
-                cmds.push('echo timer > /sys/class/leds/green:phone/trigger');
-                cmds.push('echo 1500  > /sys/class/leds/green:phone/delay_on');
-                cmds.push('echo 1500  > /sys/class/leds/green:phone/delay_off');
-                return cmds.join('; ');
-            }
 
             if (nightOnBtn) {
                 nightOnBtn.addEventListener('click', function() {
                     nightOnBtn.disabled = true;
                     nightStatus.textContent = _('Activating Night Mode…');
                     nightStatus.style.color = '#888';
-                    runCmd('/etc/init.d/ledstatus stop')
-                        .then(function() { return delay(400); })
-                        .then(function() { return runCmd(nightOnCmd()); })
+                    runCmd('/usr/bin/led-night-mode.sh on')
                         .then(function() {
-                            nightStatus.textContent = _('Night Mode active — status LEDs off, phone LED blinking.');
+                            nightStatus.textContent = _('Night Mode active — status LEDs off, power LED double-blinking.');
                             nightStatus.style.color = '#5e72e4';
                         })
                         .catch(function(e) {
@@ -480,9 +397,7 @@ return view.extend({
                     nightOffBtn.disabled = true;
                     nightStatus.textContent = _('Deactivating Night Mode…');
                     nightStatus.style.color = '#888';
-                    runCmd('echo none > /sys/class/leds/green:phone/trigger; echo 0 > /sys/class/leds/green:phone/brightness')
-                        .then(function() { return delay(200); })
-                        .then(function() { return runCmd('/etc/init.d/ledstatus start'); })
+                    runCmd('/usr/bin/led-night-mode.sh off')
                         .then(function() {
                             nightStatus.textContent = _('Night Mode off — LED service restored.');
                             nightStatus.style.color = '#2dce89';
@@ -494,82 +409,6 @@ return view.extend({
                         .finally(function() { nightOffBtn.disabled = false; });
                 });
             }
-
-            /* ── LED Test ── */
-            var testBtn  = node.querySelector('#aw1k-test-btn');
-            var stopBtn  = node.querySelector('#aw1k-test-stop');
-            var statusEl = node.querySelector('#aw1k-test-status');
-            var barEl    = node.querySelector('#aw1k-test-bar');
-
-            /* Test: cycle all 7 colors on both 5g and signal groups */
-            var TEST_STEPS = [];
-            ['5g', 'signal'].forEach(function(grp) {
-                COLORS.forEach(function(c) {
-                    if (c.id === 'off') return; /* skip off — already visible between steps */
-                    TEST_STEPS.push({ group: grp, color: c });
-                });
-            });
-
-            var testRunning = false;
-            var testAborted = false;
-
-            function setTestStatus(msg, color) {
-                if (statusEl) { statusEl.textContent = msg; statusEl.style.color = color || '#888'; }
-            }
-            function setBar(pct) {
-                if (barEl) barEl.style.width = pct + '%';
-            }
-            function allLedsOff() {
-                var leds = ['green:5g','blue:5g','red:5g','green:signal','blue:signal','red:signal'];
-                return runCmd(leds.map(function(l) {
-                    return 'echo none > /sys/class/leds/' + l + '/trigger; echo 0 > /sys/class/leds/' + l + '/brightness';
-                }).join('; '));
-            }
-
-            async function runTest() {
-                testRunning = true;
-                testAborted = false;
-                testBtn.disabled = true;
-                stopBtn.disabled = false;
-                setBar(0);
-
-                setTestStatus(_('Stopping LED service…'), '#888');
-                await runCmd('/etc/init.d/ledstatus stop');
-                await delay(500);
-
-                var total = TEST_STEPS.length;
-                for (var i = 0; i < total; i++) {
-                    if (testAborted) break;
-                    var step = TEST_STEPS[i];
-                    await allLedsOff();
-                    await runCmd(colorCmd(step.group, step.color.id, false));
-                    setBar(Math.round((i + 1) / total * 100));
-                    setTestStatus(
-                        '(' + (i+1) + '/' + total + ')  ' + step.group.toUpperCase() + ' → ' + step.color.label,
-                        step.color.hex === '#222222' ? '#888' : step.color.hex
-                    );
-                    await delay(900);
-                }
-
-                await allLedsOff();
-                await runCmd('echo none > /sys/class/leds/green:power/trigger; echo 1 > /sys/class/leds/green:power/brightness');
-                setBar(testAborted ? 0 : 100);
-                setTestStatus(testAborted ? _('Test stopped. Restarting…') : _('Test complete! Restarting…'), '#888');
-                await runCmd('/etc/init.d/ledstatus start');
-                await delay(400);
-                setTestStatus(
-                    testAborted ? _('Test stopped. Service restored.') : _('All done! Service restored.'),
-                    testAborted ? '#fb6340' : '#2dce89'
-                );
-                testRunning = false;
-                testBtn.disabled = false;
-                stopBtn.disabled = true;
-            }
-
-            if (testBtn) testBtn.addEventListener('click', function() { if (!testRunning) runTest(); });
-            if (stopBtn) stopBtn.addEventListener('click', function() {
-                if (testRunning) { testAborted = true; setTestStatus(_('Stopping test…'), '#fb6340'); }
-            });
 
             return node;
         });

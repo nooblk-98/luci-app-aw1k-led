@@ -6,6 +6,32 @@
 #   check - called by cron every minute to auto-activate/deactivate
 
 STATUS_LEDS="green:5g blue:5g red:5g green:internet green:wifi green:signal blue:signal red:signal"
+POWER_LED="/sys/class/leds/green:power"
+BLINK_PID="/tmp/led-night-blink.pid"
+
+# Airplane beacon: two quick blinks (150ms on, 150ms gap) then 3s off — runs in background
+_start_blink() {
+    python3 -c "
+import time, sys
+LED = '/sys/class/leds/green:power'
+def w(f, v):
+    open(LED + '/' + f, 'w').write(v)
+w('trigger', 'none')
+while True:
+    w('brightness', '1'); time.sleep(0.15)
+    w('brightness', '0'); time.sleep(0.15)
+    w('brightness', '1'); time.sleep(0.15)
+    w('brightness', '0'); time.sleep(3.0)
+" &
+    echo $! > "$BLINK_PID"
+}
+
+_stop_blink() {
+    if [ -f "$BLINK_PID" ]; then
+        kill "$(cat $BLINK_PID)" 2>/dev/null
+        rm -f "$BLINK_PID"
+    fi
+}
 
 night_on() {
     # Stop the led status service so it won't override
@@ -13,23 +39,26 @@ night_on() {
 
     # Turn off all status LEDs
     for led in $STATUS_LEDS; do
-        echo none      > /sys/class/leds/$led/trigger
-        echo 0         > /sys/class/leds/$led/brightness
+        echo none > /sys/class/leds/$led/trigger
+        echo 0    > /sys/class/leds/$led/brightness
     done
 
-    # Phone LED: slow airplane-style blink via timer trigger (1500ms on / 1500ms off)
-    echo timer > /sys/class/leds/green:phone/trigger
-    echo 1500  > /sys/class/leds/green:phone/delay_on
-    echo 1500  > /sys/class/leds/green:phone/delay_off
+    # Phone LED: off
+    echo none > /sys/class/leds/green:phone/trigger
+    echo 0    > /sys/class/leds/green:phone/brightness
 
-    # Power LED stays untouched
+    # Power LED: airplane double-blink beacon
+    _stop_blink
+    _start_blink
+
     logger -t led-night-mode "Night Mode activated"
 }
 
 night_off() {
-    # Stop phone LED blink
-    echo none > /sys/class/leds/green:phone/trigger
-    echo 0    > /sys/class/leds/green:phone/brightness
+    # Stop blink loop and restore power LED to solid on
+    _stop_blink
+    echo none > "$POWER_LED/trigger"
+    echo 1    > "$POWER_LED/brightness"
 
     # Restart the LED status service to restore all status LEDs
     /etc/init.d/ledstatus start 2>/dev/null
@@ -76,13 +105,16 @@ check_schedule() {
         fi
     fi
 
-    # Only act at boundary minutes to avoid re-triggering every minute
-    # Check if phone LED is currently in timer mode as proxy for "night is active"
-    PHONE_TRIGGER=$(cat /sys/class/leds/green:phone/trigger 2>/dev/null | grep -o '\[timer\]')
+    # Use PID file as proxy for "night is active"
+    if [ -f "$BLINK_PID" ] && kill -0 "$(cat $BLINK_PID)" 2>/dev/null; then
+        NIGHT_ACTIVE=1
+    else
+        NIGHT_ACTIVE=0
+    fi
 
-    if [ "$IN_WINDOW" -eq 1 ] && [ -z "$PHONE_TRIGGER" ]; then
+    if [ "$IN_WINDOW" -eq 1 ] && [ "$NIGHT_ACTIVE" -eq 0 ]; then
         night_on
-    elif [ "$IN_WINDOW" -eq 0 ] && [ -n "$PHONE_TRIGGER" ]; then
+    elif [ "$IN_WINDOW" -eq 0 ] && [ "$NIGHT_ACTIVE" -eq 1 ]; then
         night_off
     fi
 }
