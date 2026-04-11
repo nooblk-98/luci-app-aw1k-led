@@ -286,8 +286,9 @@ return view.extend({
                     if (testAborted) break;
                 }
 
-                /* Restore */
+                /* Restore — turn test LEDs off, bring power LED back on */
                 await allLedsOff();
+                await sshCmd('echo none > /sys/class/leds/green:power/trigger; echo 1 > /sys/class/leds/green:power/brightness');
                 setBar(testAborted ? 0 : 100);
                 setStatus(
                     testAborted ? _('Test stopped. Restarting LED service…') : _('Test complete! Restarting LED service…'),
