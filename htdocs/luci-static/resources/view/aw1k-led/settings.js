@@ -179,80 +179,56 @@ return view.extend({
                 '</div></td></tr>';
         }
 
-        /* Whole colors tab is one DummyValue block — reads UCI for current values */
+        /* Whole colors tab is one DummyValue block.
+         * cfgvalue() runs after UCI is loaded — return the full HTML string.
+         * rawhtml=true makes LuCI render it verbatim inside <output>. */
         o = s.taboption('colors', form.DummyValue, '_colors_ui', '');
         o.rawhtml = true;
 
-        /* renderWidget called at render time so uci is already loaded */
-        o.renderWidget = function(section_id) {
+        o.cfgvalue = function(section_id) {
             var g = function(k, d) { return uci.get('ledstatus', section_id, k) || d; };
 
-            var html = [
-                '<div style="max-width:680px">',
+            var rows5g = [
+                pickerRow('color_5g_excellent', '5G Excellent', 'SINR ≥ excellent threshold',  g('color_5g_excellent','green')),
+                pickerRow('color_5g_good',      '5G Good',      'SINR ≥ good threshold',        g('color_5g_good','blue')),
+                pickerRow('color_5g_average',   '5G Average',   'SINR ≥ average threshold',     g('color_5g_average','yellow')),
+                pickerRow('color_5g_poor',      '5G Poor',      'SINR below average — blinks',  g('color_5g_poor','magenta')),
+                pickerRow('color_5g_none',      '5G No signal', 'No NR5G cell found',            g('color_5g_none','red'))
+            ].join('');
 
-                /* ── 5G ── */
+            var rowsSig = [
+                pickerRow('color_sig_excellent', 'Signal Excellent', 'CSQ ≥ excellent threshold',  g('color_sig_excellent','green')),
+                pickerRow('color_sig_good',      'Signal Good',      'CSQ ≥ good threshold',        g('color_sig_good','blue')),
+                pickerRow('color_sig_average',   'Signal Average',   'CSQ ≥ average threshold',     g('color_sig_average','yellow')),
+                pickerRow('color_sig_weak',      'Signal Weak',      'CSQ below average — blinks',  g('color_sig_weak','red')),
+                pickerRow('color_sig_offline',   'Signal Offline',   'Internet disconnected',        g('color_sig_offline','magenta'))
+            ].join('');
+
+            return [
+                '<div style="max-width:700px">',
+
                 '<h5 style="margin:0 0 2px">5G SINR LED colors</h5>',
                 '<p style="color:#888;font-size:12px;margin:0 0 10px">',
-                'Red:5g + Green:5g + Blue:5g — all 8 colors (7 mixes + off) available.',
+                'red:5g + green:5g + blue:5g — all 8 colors (7 mixes + off) available.',
                 '</p>',
-                '<table style="border-collapse:collapse;width:100%">',
-                pickerRow('color_5g_excellent', '5G Excellent', 'SINR ≥ excellent threshold', g('color_5g_excellent','green')),
-                pickerRow('color_5g_good',      '5G Good',      'SINR ≥ good threshold',      g('color_5g_good','blue')),
-                pickerRow('color_5g_average',   '5G Average',   'SINR ≥ average threshold',   g('color_5g_average','yellow')),
-                pickerRow('color_5g_poor',      '5G Poor',      'SINR below average — blinks', g('color_5g_poor','magenta')),
-                pickerRow('color_5g_none',      '5G No signal', 'No NR5G cell found',          g('color_5g_none','red')),
-                '</table>',
+                '<table style="border-collapse:collapse;width:100%">', rows5g, '</table>',
 
-                /* ── Signal ── */
                 '<h5 style="margin:16px 0 2px">Signal (CSQ) LED colors</h5>',
                 '<p style="color:#888;font-size:12px;margin:0 0 10px">',
-                'Red:signal + Green:signal + Blue:signal.',
+                'red:signal + green:signal + blue:signal.',
                 '</p>',
-                '<table style="border-collapse:collapse;width:100%">',
-                pickerRow('color_sig_excellent', 'Signal Excellent', 'CSQ ≥ excellent threshold',    g('color_sig_excellent','green')),
-                pickerRow('color_sig_good',      'Signal Good',      'CSQ ≥ good threshold',         g('color_sig_good','blue')),
-                pickerRow('color_sig_average',   'Signal Average',   'CSQ ≥ average threshold',      g('color_sig_average','yellow')),
-                pickerRow('color_sig_weak',      'Signal Weak',      'CSQ below average — blinks',   g('color_sig_weak','red')),
-                pickerRow('color_sig_offline',   'Signal Offline',   'Internet disconnected',         g('color_sig_offline','magenta')),
-                '</table>',
+                '<table style="border-collapse:collapse;width:100%">', rowsSig, '</table>',
 
-                /* ── Buttons ── */
                 '<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">',
                 '<button type="button" class="btn cbi-button cbi-button-action" id="aw1k-color-save-btn">💾 Save Colors</button>',
                 '<button type="button" class="btn cbi-button cbi-button-action" id="aw1k-color-preview-btn">👁 Preview on LEDs</button>',
                 '<button type="button" class="btn cbi-button cbi-button-reset"  id="aw1k-color-restore-btn">↺ Restore service</button>',
                 '</div>',
                 '<div id="aw1k-color-status" style="font-size:13px;margin-top:8px;min-height:20px;color:#888"></div>',
-                '</div>',
-
-                /* global onclick handler injected once */
-                '<script>',
-                'function awLkPick(el){',
-                '  var key=el.dataset.key;',
-                '  document.querySelectorAll("[data-key=\'"+key+"\']").forEach(function(s){',
-                '    s.style.outline="";s.style.outlineOffset="";s.style.transform="";',
-                '  });',
-                '  el.style.outline="3px solid #5e72e4";',
-                '  el.style.outlineOffset="2px";',
-                '  el.style.transform="scale(1.18)";',
-                '  var hex=el.style.background;',
-                /* map hex back via COLORS lookup via data-color */
-                '  var colorId=el.dataset.color;',
-                '  var previewColors={"off":"#222222","red":"#ff3030","green":"#22dd44","blue":"#3399ff",',
-                '    "yellow":"#ffdd00","cyan":"#00eedd","magenta":"#dd44ff","white":"#ffffff"};',
-                '  var p=document.getElementById("aw1k-prev-"+key);',
-                '  if(p)p.style.background=previewColors[colorId]||hex;',
-                '  var l=document.getElementById("aw1k-lbl-"+key);',
-                '  var labels={"off":"Off","red":"Red","green":"Green","blue":"Blue",',
-                '    "yellow":"Yellow","cyan":"Cyan","magenta":"Magenta","white":"White"};',
-                '  if(l)l.textContent=labels[colorId]||colorId;',
-                '}',
-                '</script>'
+                '</div>'
             ].join('');
-
-            return E('div', { innerHTML: html });
         };
-        o.write = function() {}; /* never save this dummy through LuCI */
+        o.write = function() {};
 
         /* ══════════════════════════════════════════════════════════════════
          * TAB: Night Mode
@@ -342,6 +318,20 @@ return view.extend({
          * RENDER + wire up all interactive buttons
          * ════════════════════════════════════════════════════════════════════ */
         return m.render().then(function(node) {
+
+            /* Global swatch click handler — must be on window so inline
+             * onclick="awLkPick(this)" attributes in the color picker HTML work */
+            window.awLkPick = function(el) {
+                var key = el.dataset.key;
+                node.querySelectorAll('[data-key="' + key + '"]').forEach(function(sw) {
+                    sw.style.outline = ''; sw.style.outlineOffset = ''; sw.style.transform = '';
+                });
+                el.style.outline = '3px solid #5e72e4'; el.style.outlineOffset = '2px'; el.style.transform = 'scale(1.18)';
+                var hexMap   = { off:'#222222',red:'#ff3030',green:'#22dd44',blue:'#3399ff',yellow:'#ffdd00',cyan:'#00eedd',magenta:'#dd44ff',white:'#ffffff' };
+                var labelMap = { off:'Off',red:'Red',green:'Green',blue:'Blue',yellow:'Yellow',cyan:'Cyan',magenta:'Magenta',white:'White' };
+                var p = node.querySelector('#aw1k-prev-' + key); if (p) p.style.background = hexMap[el.dataset.color] || '#888';
+                var l = node.querySelector('#aw1k-lbl-'  + key); if (l) l.textContent = labelMap[el.dataset.color] || el.dataset.color;
+            };
 
             function runCmd(cmd) {
                 return fetch('/cgi-bin/luci/admin/system/aw1k-led/runcmd', {
