@@ -1,0 +1,14 @@
+config ledstatus 'settings'
+	option enabled '1'
+	option interval '20'
+	option modem_port '/dev/ttyUSB2'
+
+	# 5G SINR thresholds
+	option sinr_excellent '25'
+	option sinr_good '15'
+	option sinr_average '5'
+
+	# CSQ signal thresholds
+	option csq_excellent '20'
+	option csq_good '14'
+	option csq_average '10'

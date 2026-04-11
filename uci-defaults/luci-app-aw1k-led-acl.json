@@ -1,0 +1,11 @@
+{
+    "luci-app-aw1k-led": {
+        "description": "Grant access to AW1000 LED settings",
+        "read": {
+            "uci": [ "ledstatus" ]
+        },
+        "write": {
+            "uci": [ "ledstatus" ]
+        }
+    }
+}
