@@ -219,10 +219,6 @@ return view.extend({
                 '</p>',
                 '<table style="border-collapse:collapse;width:100%">', rowsSig, '</table>',
 
-                '<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">',
-                '<button type="button" class="btn cbi-button cbi-button-action" id="aw1k-color-save-btn">💾 Save Colors</button>',
-                '</div>',
-                '<div id="aw1k-color-status" style="font-size:13px;margin-top:8px;min-height:20px;color:#888"></div>',
                 '</div>'
             ].join('');
         };
@@ -376,44 +372,6 @@ return view.extend({
                 });
             }
 
-            /* ── Color tab: Save / Preview / Restore ── */
-            var colorSaveBtn = node.querySelector('#aw1k-color-save-btn');
-            var colorStatus  = node.querySelector('#aw1k-color-status');
-
-            var COLOR_KEYS = [
-                'color_5g_excellent','color_5g_good','color_5g_average','color_5g_poor','color_5g_none',
-                'color_sig_excellent','color_sig_good','color_sig_average','color_sig_weak','color_sig_offline'
-            ];
-
-            /* Read selected color from the outlined swatch for a given uciKey */
-            function getPickedColor(uciKey) {
-                /* The selected swatch has transform:scale(1.18) in its style */
-                var sel = node.querySelector('[data-key="' + uciKey + '"][style*="scale"]');
-                return sel ? sel.dataset.color : (uci.get('ledstatus', 'settings', uciKey) || 'green');
-            }
-
-            function setColorStatus(msg, color) {
-                if (colorStatus) { colorStatus.textContent = msg; colorStatus.style.color = color || '#888'; }
-            }
-
-            /* Save all 10 colors via dedicated controller endpoint */
-            if (colorSaveBtn) {
-                colorSaveBtn.addEventListener('click', function() {
-                    colorSaveBtn.disabled = true;
-                    setColorStatus('Saving colors…', '#888');
-                    var body = COLOR_KEYS.map(function(k) {
-                        return encodeURIComponent(k) + '=' + encodeURIComponent(getPickedColor(k));
-                    }).join('&');
-                    fetch('/cgi-bin/luci/admin/system/aw1k-led/save_colors', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        body: body
-                    })
-                    .then(function() { setColorStatus('Colors saved. LED service restarted.', '#2dce89'); })
-                    .catch(function(e) { setColorStatus('Error: ' + e.message, '#f5365c'); })
-                    .finally(function() { colorSaveBtn.disabled = false; });
-                });
-            }
 
             /* ── Night Mode buttons ── */
             var nightOnBtn  = node.querySelector('#aw1k-night-on-btn');
@@ -460,11 +418,58 @@ return view.extend({
         });
     },
 
+    handleSave: function(ev) {
+        var COLOR_KEYS = [
+            'color_5g_excellent','color_5g_good','color_5g_average','color_5g_poor','color_5g_none',
+            'color_sig_excellent','color_sig_good','color_sig_average','color_sig_weak','color_sig_offline'
+        ];
+        var body = COLOR_KEYS.map(function(k) {
+            var sel = document.querySelector('[data-key="' + k + '"][style*="scale"]');
+            var val = sel ? sel.dataset.color : '';
+            return val ? encodeURIComponent(k) + '=' + encodeURIComponent(val) : null;
+        }).filter(Boolean).join('&');
+
+        var saveColors = body ? fetch('/cgi-bin/luci/admin/system/aw1k-led/save_colors', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body
+        }) : Promise.resolve();
+
+        return Promise.all([
+            saveColors,
+            view.prototype.handleSave.call(this, ev)
+        ]);
+    },
+
     handleSaveApply: function(ev) {
         return this.handleSave(ev).then(function() {
             return fetch('/cgi-bin/luci/admin/system/aw1k-led/restart', { method: 'POST' });
-        }).then(function() {
-            ui.addNotification(null, E('p', _('Settings saved. LED service restarted.')), 'info');
         });
+    },
+
+    handleReset: function(ev) {
+        var DEFAULTS = {
+            color_5g_excellent:  'green',
+            color_5g_good:       'blue',
+            color_5g_average:    'yellow',
+            color_5g_poor:       'magenta',
+            color_5g_none:       'red',
+            color_sig_excellent: 'green',
+            color_sig_good:      'blue',
+            color_sig_average:   'yellow',
+            color_sig_weak:      'red',
+            color_sig_offline:   'magenta'
+        };
+        var body = Object.keys(DEFAULTS).map(function(k) {
+            return encodeURIComponent(k) + '=' + encodeURIComponent(DEFAULTS[k]);
+        }).join('&');
+
+        return fetch('/cgi-bin/luci/admin/system/aw1k-led/save_colors', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body
+        }).then(function() {
+            return view.prototype.handleReset.call(this, ev);
+        }.bind(this));
     }
 });
