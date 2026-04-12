@@ -410,10 +410,13 @@ return view.extend({
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: nightBody
             }).then(function() {
+                var cmd = nightVals.night_enabled === '1'
+                    ? '/usr/bin/led-night-mode.sh check'
+                    : '/usr/bin/led-night-mode.sh off';
                 return fetch('/cgi-bin/luci/admin/system/aw1k-led/runcmd', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: 'cmd=' + encodeURIComponent('/usr/bin/led-night-mode.sh check')
+                    body: 'cmd=' + encodeURIComponent(cmd)
                 });
             });
         });
