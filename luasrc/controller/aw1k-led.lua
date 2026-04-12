@@ -69,6 +69,9 @@ function action_save_night()
     luci.sys.call("crontab -l 2>/dev/null | grep -v '" .. cron_tag .. "' | crontab -")
     if enabled == "1" then
         luci.sys.call("(crontab -l 2>/dev/null; echo '* * * * * /usr/bin/led-night-mode.sh check " .. cron_tag .. "') | crontab -")
+        luci.sys.call("/usr/bin/led-night-mode.sh check >/dev/null 2>&1")
+    else
+        luci.sys.call("/usr/bin/led-night-mode.sh off >/dev/null 2>&1")
     end
 
     luci.http.status(200, "OK")
