@@ -380,30 +380,23 @@ return view.extend({
             body: colorBody
         }) : Promise.resolve();
 
-        /* ── night mode — hook into uci staging to capture values before flush ── */
-        var origSet = uci.set.bind(uci);
-        var nightVals = {
-            night_enabled: uci.get('ledstatus', 'settings', 'night_enabled') || '0',
-            night_start:   uci.get('ledstatus', 'settings', 'night_start')   || '22:00',
-            night_end:     uci.get('ledstatus', 'settings', 'night_end')     || '06:00'
-        };
-        uci.set = function(config, section, option, value) {
-            if (config === 'ledstatus' && section === 'settings' &&
-                (option === 'night_enabled' || option === 'night_start' || option === 'night_end')) {
-                nightVals[option] = value;
-            }
-            return origSet(config, section, option, value);
-        };
+        /* ── night mode — read DOM values before save ── */
+        /* LuCI Flag renders checkbox with id = cbid.{config}.{section}.{option} */
+        var cbNight  = document.getElementById('cbid.ledstatus.settings.night_enabled');
+        var cbStart  = document.getElementById('cbid.ledstatus.settings.night_start');
+        var cbEnd    = document.getElementById('cbid.ledstatus.settings.night_end');
+        var nightEnabled = cbNight ? (cbNight.checked ? '1' : '0') : uci.get('ledstatus','settings','night_enabled') || '0';
+        var nightStart   = cbStart ? cbStart.value : uci.get('ledstatus','settings','night_start') || '22:00';
+        var nightEnd     = cbEnd   ? cbEnd.value   : uci.get('ledstatus','settings','night_end')   || '06:00';
 
         return Promise.all([
             saveColors,
             view.prototype.handleSave.call(this, ev)
         ]).then(function() {
-            uci.set = origSet;
             var nightBody = [
-                'night_enabled=' + encodeURIComponent(nightVals.night_enabled),
-                'night_start='   + encodeURIComponent(nightVals.night_start),
-                'night_end='     + encodeURIComponent(nightVals.night_end)
+                'night_enabled=' + encodeURIComponent(nightEnabled),
+                'night_start='   + encodeURIComponent(nightStart),
+                'night_end='     + encodeURIComponent(nightEnd)
             ].join('&');
             return fetch('/cgi-bin/luci/admin/system/aw1k-led/save_night', {
                 method: 'POST',
