@@ -9,6 +9,9 @@ function index()
     entry({"admin", "system", "aw1k-led", "restart"},
         call("action_restart"))
 
+    entry({"admin", "system", "aw1k-led", "restart_if_not_night"},
+        call("action_restart_if_not_night"))
+
     entry({"admin", "system", "aw1k-led", "runcmd"},
         call("action_runcmd"))
 
@@ -21,6 +24,26 @@ end
 
 function action_restart()
     luci.sys.call("/etc/init.d/ledstatus restart >/dev/null 2>&1")
+    luci.http.status(200, "OK")
+    luci.http.prepare_content("text/plain")
+    luci.http.write("OK")
+end
+
+function action_restart_if_not_night()
+    -- Only restart ledstatus if night mode is not currently active
+    local blink_pid = "/tmp/led-night-blink.pid"
+    local night_active = false
+    local f = io.open(blink_pid, "r")
+    if f then
+        local pid = f:read("*l")
+        f:close()
+        if pid and luci.sys.call("kill -0 " .. pid .. " 2>/dev/null") == 0 then
+            night_active = true
+        end
+    end
+    if not night_active then
+        luci.sys.call("/etc/init.d/ledstatus restart >/dev/null 2>&1")
+    end
     luci.http.status(200, "OK")
     luci.http.prepare_content("text/plain")
     luci.http.write("OK")

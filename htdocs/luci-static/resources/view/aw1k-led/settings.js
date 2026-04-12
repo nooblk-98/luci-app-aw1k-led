@@ -408,7 +408,8 @@ return view.extend({
 
     handleSaveApply: function(ev) {
         return this.handleSave(ev).then(function() {
-            return fetch('/cgi-bin/luci/admin/system/aw1k-led/restart', { method: 'POST' });
+            /* Don't restart ledstatus if night mode is active — it would undo the night state */
+            return fetch('/cgi-bin/luci/admin/system/aw1k-led/restart_if_not_night', { method: 'POST' });
         });
     },
 
