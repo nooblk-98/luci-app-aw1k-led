@@ -409,6 +409,12 @@ return view.extend({
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: nightBody
+            }).then(function() {
+                return fetch('/cgi-bin/luci/admin/system/aw1k-led/runcmd', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'cmd=' + encodeURIComponent('/usr/bin/led-night-mode.sh check')
+                });
             });
         });
     },
