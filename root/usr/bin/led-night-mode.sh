@@ -79,13 +79,13 @@ check_schedule() {
     NOW_M=$(date +%M)
     NOW_MINS=$(( NOW_H * 60 + NOW_M ))
 
-    START_H=$(echo "$START" | cut -d: -f1)
-    START_M=$(echo "$START" | cut -d: -f2)
-    START_MINS=$(( 10#$START_H * 60 + 10#$START_M ))
+    START_H=$(echo "$START" | cut -d: -f1 | sed 's/^0*//')
+    START_M=$(echo "$START" | cut -d: -f2 | sed 's/^0*//')
+    START_MINS=$(( ${START_H:-0} * 60 + ${START_M:-0} ))
 
-    END_H=$(echo "$END" | cut -d: -f1)
-    END_M=$(echo "$END" | cut -d: -f2)
-    END_MINS=$(( 10#$END_H * 60 + 10#$END_M ))
+    END_H=$(echo "$END" | cut -d: -f1 | sed 's/^0*//')
+    END_M=$(echo "$END" | cut -d: -f2 | sed 's/^0*//')
+    END_MINS=$(( ${END_H:-0} * 60 + ${END_M:-0} ))
 
     # Determine if we are inside the night window
     # Handles overnight ranges (e.g. 22:00 -> 06:00) and same-day (e.g. 01:00 -> 05:00)

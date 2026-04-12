@@ -269,10 +269,6 @@ return view.extend({
             '<li>' + _('green:phone → OFF') + '</li>',
             '<li>' + _('ledstatus service is stopped during night window and restarted at end time') + '</li>',
             '</ul></div>',
-            '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">',
-            '<button type="button" class="btn cbi-button cbi-button-action" id="aw1k-night-on-btn">🌙 ' + _('Test Night Mode ON') + '</button>',
-            '<button type="button" class="btn cbi-button cbi-button-reset" id="aw1k-night-off-btn">☀️ ' + _('Test Night Mode OFF') + '</button>',
-            '</div>',
             '<div id="aw1k-night-status" style="font-size:13px;min-height:20px;color:#888"></div>'
         ].join('');
 
@@ -340,17 +336,6 @@ return view.extend({
                 var l = node.querySelector('#aw1k-lbl-'  + key); if (l) l.textContent = labelMap[el.dataset.color] || el.dataset.color;
             };
 
-            function runCmd(cmd) {
-                return fetch('/cgi-bin/luci/admin/system/aw1k-led/runcmd', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: 'cmd=' + encodeURIComponent(cmd)
-                });
-            }
-            function delay(ms) {
-                return new Promise(function(r) { setTimeout(r, ms); });
-            }
-
             /* ── Restart button ── */
             var restartBtn    = node.querySelector('#aw1k-restart-btn');
             var restartStatus = node.querySelector('#aw1k-restart-status');
@@ -373,72 +358,59 @@ return view.extend({
             }
 
 
-            /* ── Night Mode buttons ── */
-            var nightOnBtn  = node.querySelector('#aw1k-night-on-btn');
-            var nightOffBtn = node.querySelector('#aw1k-night-off-btn');
-            var nightStatus = node.querySelector('#aw1k-night-status');
-
-            if (nightOnBtn) {
-                nightOnBtn.addEventListener('click', function() {
-                    nightOnBtn.disabled = true;
-                    nightStatus.textContent = _('Activating Night Mode…');
-                    nightStatus.style.color = '#888';
-                    runCmd('/usr/bin/led-night-mode.sh on')
-                        .then(function() {
-                            nightStatus.textContent = _('Night Mode active — status LEDs off, power LED double-blinking.');
-                            nightStatus.style.color = '#5e72e4';
-                        })
-                        .catch(function(e) {
-                            nightStatus.textContent = _('Error: ') + e.message;
-                            nightStatus.style.color = '#f5365c';
-                        })
-                        .finally(function() { nightOnBtn.disabled = false; });
-                });
-            }
-
-            if (nightOffBtn) {
-                nightOffBtn.addEventListener('click', function() {
-                    nightOffBtn.disabled = true;
-                    nightStatus.textContent = _('Deactivating Night Mode…');
-                    nightStatus.style.color = '#888';
-                    runCmd('/usr/bin/led-night-mode.sh off')
-                        .then(function() {
-                            nightStatus.textContent = _('Night Mode off — LED service restored.');
-                            nightStatus.style.color = '#2dce89';
-                        })
-                        .catch(function(e) {
-                            nightStatus.textContent = _('Error: ') + e.message;
-                            nightStatus.style.color = '#f5365c';
-                        })
-                        .finally(function() { nightOffBtn.disabled = false; });
-                });
-            }
-
             return node;
         });
     },
 
     handleSave: function(ev) {
+        /* ── colors ── */
         var COLOR_KEYS = [
             'color_5g_excellent','color_5g_good','color_5g_average','color_5g_poor','color_5g_none',
             'color_sig_excellent','color_sig_good','color_sig_average','color_sig_weak','color_sig_offline'
         ];
-        var body = COLOR_KEYS.map(function(k) {
+        var colorBody = COLOR_KEYS.map(function(k) {
             var sel = document.querySelector('[data-key="' + k + '"][style*="scale"]');
             var val = sel ? sel.dataset.color : '';
             return val ? encodeURIComponent(k) + '=' + encodeURIComponent(val) : null;
         }).filter(Boolean).join('&');
 
-        var saveColors = body ? fetch('/cgi-bin/luci/admin/system/aw1k-led/save_colors', {
+        var saveColors = colorBody ? fetch('/cgi-bin/luci/admin/system/aw1k-led/save_colors', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: body
+            body: colorBody
         }) : Promise.resolve();
+
+        /* ── night mode — hook into uci staging to capture values before flush ── */
+        var origSet = uci.set.bind(uci);
+        var nightVals = {
+            night_enabled: uci.get('ledstatus', 'settings', 'night_enabled') || '0',
+            night_start:   uci.get('ledstatus', 'settings', 'night_start')   || '22:00',
+            night_end:     uci.get('ledstatus', 'settings', 'night_end')     || '06:00'
+        };
+        uci.set = function(config, section, option, value) {
+            if (config === 'ledstatus' && section === 'settings' &&
+                (option === 'night_enabled' || option === 'night_start' || option === 'night_end')) {
+                nightVals[option] = value;
+            }
+            return origSet(config, section, option, value);
+        };
 
         return Promise.all([
             saveColors,
             view.prototype.handleSave.call(this, ev)
-        ]);
+        ]).then(function() {
+            uci.set = origSet;
+            var nightBody = [
+                'night_enabled=' + encodeURIComponent(nightVals.night_enabled),
+                'night_start='   + encodeURIComponent(nightVals.night_start),
+                'night_end='     + encodeURIComponent(nightVals.night_end)
+            ].join('&');
+            return fetch('/cgi-bin/luci/admin/system/aw1k-led/save_night', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: nightBody
+            });
+        });
     },
 
     handleSaveApply: function(ev) {
