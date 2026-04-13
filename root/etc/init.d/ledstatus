@@ -6,11 +6,19 @@ STOP=10
 USE_PROCD=1
 
 start_service() {
-    local enabled
+    local enabled night_enabled
     config_load ledstatus
     config_get enabled settings enabled '1'
+    config_get night_enabled settings night_enabled '0'
 
     [ "$enabled" = "0" ] && return 0
+
+    # Start night scheduler once at service boot if configured.
+    if [ "$night_enabled" = "1" ]; then
+        /usr/bin/led-night-mode.sh start-scheduler >/dev/null 2>&1
+    else
+        /usr/bin/led-night-mode.sh stop-scheduler >/dev/null 2>&1
+    fi
 
     procd_open_instance
     procd_set_param command /usr/bin/led-status-check-daemon.sh
