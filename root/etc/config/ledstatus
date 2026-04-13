@@ -15,8 +15,8 @@ config ledstatus 'settings'
 
 	# Night Mode
 	option night_enabled '0'
-	option night_start '22:00'
-	option night_end '06:00'
+	option night_start '21:00'
+	option night_end '07:00'
 
 	# 5G LED colors (red/green/blue/yellow/cyan/magenta/white/off)
 	option color_5g_excellent 'green'

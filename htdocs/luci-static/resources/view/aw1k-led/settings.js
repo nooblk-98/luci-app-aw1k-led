@@ -22,7 +22,6 @@ function getServiceStatus() {
 /* ─── Color palette ────────────────────────────────────────────────────────
  * Each entry: { id, label, hex, r, g, b }
  * r/g/b are 0 or 1 — the physical LED channels on AW1000 (max_brightness=1)
- * Mixing two or three channels gives all possible colors.
  * ────────────────────────────────────────────────────────────────────────── */
 var COLORS = [
     { id: 'off',     label: 'Off',     hex: '#222222', r:0, g:0, b:0 },
@@ -35,29 +34,10 @@ var COLORS = [
     { id: 'white',   label: 'White',   hex: '#ffffff', r:1, g:1, b:1 }
 ];
 
-/* Color id → COLORS entry */
 function colorById(id) {
     for (var i = 0; i < COLORS.length; i++)
         if (COLORS[i].id === id) return COLORS[i];
-    return COLORS[0]; /* default off */
-}
-
-/* Build sysfs commands to set a group (prefix = '5g' or 'signal') to a color */
-function colorCmd(prefix, colorId, blink) {
-    var c    = colorById(colorId);
-    var leds = ['red', 'green', 'blue'];
-    var cmds = [];
-    leds.forEach(function(ch) {
-        var path = '/sys/class/leds/' + ch + ':' + prefix;
-        var on   = c[ch] === 1 ? 1 : 0;
-        if (blink && on) {
-            cmds.push('echo heartbeat > ' + path + '/trigger');
-        } else {
-            cmds.push('echo none > ' + path + '/trigger');
-            cmds.push('echo ' + on + ' > ' + path + '/brightness');
-        }
-    });
-    return cmds.join('; ');
+    return COLORS[0];
 }
 
 return view.extend({
@@ -149,11 +129,7 @@ return view.extend({
 
         /* ══════════════════════════════════════════════════════════════════
          * TAB: LED Colors
-         * Rendered entirely as DummyValue HTML — save/preview via dedicated
-         * controller endpoints so LuCI form machinery is not involved at all.
          * ══════════════════════════════════════════════════════════════════ */
-
-        /* Build one swatch-picker row and return HTML string */
         function pickerRow(uciKey, label, desc, currentColor) {
             var swatches = COLORS.map(function(c) {
                 var sel = c.id === currentColor
@@ -179,9 +155,6 @@ return view.extend({
                 '</div></td></tr>';
         }
 
-        /* Whole colors tab is one DummyValue block.
-         * cfgvalue() runs after UCI is loaded — return the full HTML string.
-         * rawhtml=true makes LuCI render it verbatim inside <output>. */
         o = s.taboption('colors', form.DummyValue, '_colors_ui', '');
         o.rawhtml = true;
 
@@ -206,19 +179,12 @@ return view.extend({
 
             return [
                 '<div style="max-width:700px">',
-
                 '<h5 style="margin:0 0 2px">5G SINR LED colors</h5>',
-                '<p style="color:#888;font-size:12px;margin:0 0 10px">',
-                'red:5g + green:5g + blue:5g — all 8 colors (7 mixes + off) available.',
-                '</p>',
+                '<p style="color:#888;font-size:12px;margin:0 0 10px">red:5g + green:5g + blue:5g — all 8 colors available.</p>',
                 '<table style="border-collapse:collapse;width:100%">', rows5g, '</table>',
-
                 '<h5 style="margin:16px 0 2px">Signal (CSQ) LED colors</h5>',
-                '<p style="color:#888;font-size:12px;margin:0 0 10px">',
-                'red:signal + green:signal + blue:signal.',
-                '</p>',
+                '<p style="color:#888;font-size:12px;margin:0 0 10px">red:signal + green:signal + blue:signal.</p>',
                 '<table style="border-collapse:collapse;width:100%">', rowsSig, '</table>',
-
                 '</div>'
             ].join('');
         };
@@ -229,30 +195,24 @@ return view.extend({
          * ══════════════════════════════════════════════════════════════════ */
         o = s.taboption('nightmode', form.Flag, 'night_enabled',
             _('Enable Night Mode'),
-            _('During the scheduled window all status LEDs turn off. The power LED stays on. The phone LED slow-blinks like an airplane beacon.'));
+            _('During the scheduled window all status LEDs turn off. The power LED slow-blinks like an airplane beacon.'));
         o.rmempty = false; o.default = '0';
 
-        o = s.taboption('nightmode', form.DummyValue, '_night_hdr', '');
-        o.rawhtml = true;
-        o.default = '<h5 style="margin:8px 0 4px">' + _('Schedule') + '</h5>' +
-                    '<p style="color:#888;font-size:12px;margin:0 0 10px">' +
-                    _('Night Mode activates at the Start time and deactivates at the End time. Both use 24-hour format (HH:MM).') + '</p>';
-
         o = s.taboption('nightmode', form.Value, 'night_start',
-            _('Start time'), _('Night Mode begins at this time, e.g. 22:00'));
-        o.placeholder = '22:00'; o.rmempty = false;
+            _('Start time'), _('Night Mode begins at this time (HH:MM), e.g. 21:00'));
+        o.placeholder = '21:00'; o.rmempty = false;
         o.validate = function(section_id, value) {
-            if (!/^\d{1,2}:\d{2}$/.test(value)) return _('Use HH:MM format, e.g. 22:00');
+            if (!/^\d{1,2}:\d{2}$/.test(value)) return _('Use HH:MM format');
             var p = value.split(':');
             if (+p[0] > 23 || +p[1] > 59) return _('Invalid time');
             return true;
         };
 
         o = s.taboption('nightmode', form.Value, 'night_end',
-            _('End time'), _('Night Mode ends at this time, e.g. 06:00'));
-        o.placeholder = '06:00'; o.rmempty = false;
+            _('End time'), _('Night Mode ends at this time (HH:MM), e.g. 07:00'));
+        o.placeholder = '07:00'; o.rmempty = false;
         o.validate = function(section_id, value) {
-            if (!/^\d{1,2}:\d{2}$/.test(value)) return _('Use HH:MM format, e.g. 06:00');
+            if (!/^\d{1,2}:\d{2}$/.test(value)) return _('Use HH:MM format');
             var p = value.split(':');
             if (+p[0] > 23 || +p[1] > 59) return _('Invalid time');
             return true;
@@ -261,15 +221,13 @@ return view.extend({
         o = s.taboption('nightmode', form.DummyValue, '_night_info', '');
         o.rawhtml = true;
         o.default = [
-            '<div style="background:var(--color-bg-2,#f4f4f4);border-radius:8px;padding:12px 16px;margin:8px 0 16px;font-size:13px">',
+            '<div style="background:var(--color-bg-2,#f4f4f4);border-radius:8px;padding:12px 16px;margin:8px 0 0;font-size:13px">',
             '<b>' + _('Night Mode behaviour') + '</b><br>',
             '<ul style="margin:6px 0 0 16px;padding:0">',
             '<li>' + _('All status LEDs (5G, Internet, WiFi, Signal) → OFF') + '</li>',
-            '<li>' + _('green:power → heartbeat double-pulse (two quick flashes then pause, like airplane tail beacon)') + '</li>',
+            '<li>' + _('green:power → slow double-pulse beacon blink') + '</li>',
             '<li>' + _('green:phone → OFF') + '</li>',
-            '<li>' + _('ledstatus service is stopped during night window and restarted at end time') + '</li>',
-            '</ul></div>',
-            '<div id="aw1k-night-status" style="font-size:13px;min-height:20px;color:#888"></div>'
+            '</ul></div>'
         ].join('');
 
         /* ══════════════════════════════════════════════════════════════════
@@ -279,51 +237,39 @@ return view.extend({
         o.rawhtml = true;
         o.default = [
             '<div style="max-width:480px">',
-
             '<h5 style="margin:0 0 4px">AW1000 LED Status</h5>',
             '<p style="color:#888;font-size:12px;margin:0 0 16px">LED controller for the Arcadyan AW1000 router on OpenWrt.</p>',
-
             '<table style="width:100%;border-collapse:collapse;font-size:13px">',
-
             '<tr style="border-bottom:1px solid rgba(0,0,0,0.06)">',
             '<td style="padding:8px 0;color:#888;width:130px">Version</td>',
             '<td style="padding:8px 0;font-weight:600">1.0.0</td>',
             '</tr>',
-
             '<tr style="border-bottom:1px solid rgba(0,0,0,0.06)">',
             '<td style="padding:8px 0;color:#888">Developer</td>',
             '<td style="padding:8px 0;font-weight:600">NoobLk</td>',
             '</tr>',
-
             '<tr style="border-bottom:1px solid rgba(0,0,0,0.06)">',
             '<td style="padding:8px 0;color:#888">Repository</td>',
             '<td style="padding:8px 0"><a href="https://github.com/nooblk-98/luci-app-aw1k-led" target="_blank" style="color:#5e72e4;text-decoration:none">github.com/nooblk-98/luci-app-aw1k-led</a></td>',
             '</tr>',
-
             '<tr style="border-bottom:1px solid rgba(0,0,0,0.06)">',
             '<td style="padding:8px 0;color:#888">Issues / Support</td>',
             '<td style="padding:8px 0"><a href="https://github.com/nooblk-98/luci-app-aw1k-led/issues" target="_blank" style="color:#5e72e4;text-decoration:none">Open an issue</a></td>',
             '</tr>',
-
             '<tr>',
             '<td style="padding:8px 0;color:#888">License</td>',
             '<td style="padding:8px 0">GPL-3.0-or-later</td>',
             '</tr>',
-
             '</table>',
-
             '<p style="margin:20px 0 0;color:#bbb;font-size:12px">Made with ♥ for the OpenWrt community</p>',
-
             '</div>'
         ].join('');
 
         /* ════════════════════════════════════════════════════════════════════
-         * RENDER + wire up all interactive buttons
+         * RENDER + wire up interactive buttons
          * ════════════════════════════════════════════════════════════════════ */
         return m.render().then(function(node) {
 
-            /* Global swatch click handler — must be on window so inline
-             * onclick="awLkPick(this)" attributes in the color picker HTML work */
             window.awLkPick = function(el) {
                 var key = el.dataset.key;
                 node.querySelectorAll('[data-key="' + key + '"]').forEach(function(sw) {
@@ -344,82 +290,41 @@ return view.extend({
                     restartBtn.disabled = true;
                     restartStatus.textContent = _('Restarting…');
                     restartStatus.style.color = '#888';
-                    fetch('/cgi-bin/luci/admin/system/aw1k-led/restart', { method: 'POST' })
-                        .then(function() {
-                            restartStatus.textContent = _('Restarted successfully.');
-                            restartStatus.style.color = '#2dce89';
-                        })
-                        .catch(function(e) {
-                            restartStatus.textContent = _('Error: ') + e.message;
-                            restartStatus.style.color = '#f5365c';
-                        })
-                        .finally(function() { restartBtn.disabled = false; });
+                    L.resolveDefault(rpc.declare({
+                        object: 'service',
+                        method: 'restart',
+                        params: ['name']
+                    })('ledstatus'), null).then(function() {
+                        restartStatus.textContent = _('Restarted successfully.');
+                        restartStatus.style.color = '#2dce89';
+                    }).catch(function(e) {
+                        restartStatus.textContent = _('Error: ') + e.message;
+                        restartStatus.style.color = '#f5365c';
+                    }).finally(function() { restartBtn.disabled = false; });
                 });
             }
-
 
             return node;
         });
     },
 
     handleSave: function(ev) {
-        /* ── colors ── */
+        /* Save color picker selections into UCI before the standard save */
         var COLOR_KEYS = [
             'color_5g_excellent','color_5g_good','color_5g_average','color_5g_poor','color_5g_none',
             'color_sig_excellent','color_sig_good','color_sig_average','color_sig_weak','color_sig_offline'
         ];
-        var colorBody = COLOR_KEYS.map(function(k) {
+        COLOR_KEYS.forEach(function(k) {
             var sel = document.querySelector('[data-key="' + k + '"][style*="scale"]');
-            var val = sel ? sel.dataset.color : '';
-            return val ? encodeURIComponent(k) + '=' + encodeURIComponent(val) : null;
-        }).filter(Boolean).join('&');
-
-        var saveColors = colorBody ? fetch('/cgi-bin/luci/admin/system/aw1k-led/save_colors', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: colorBody
-        }) : Promise.resolve();
-
-        function normalizeTime(v, fallback) {
-            var raw = (typeof v === 'string') ? v.trim() : '';
-            if (!/^\d{1,2}:\d{2}$/.test(raw))
-                return fallback;
-            var p = raw.split(':');
-            var h = +p[0], m = +p[1];
-            if (h < 0 || h > 23 || m < 0 || m > 59)
-                return fallback;
-            return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
-        }
-
-        var cbNight = document.querySelector('input[type="checkbox"][id$=".night_enabled"]');
-        var inStart = document.querySelector('input[id$=".night_start"]:not([type="hidden"])');
-        var inEnd = document.querySelector('input[id$=".night_end"]:not([type="hidden"])');
-
-        var nightEnabled = cbNight && cbNight.checked ? '1' : '0';
-        var nightStart = normalizeTime(inStart ? inStart.value : '', '22:00');
-        var nightEnd = normalizeTime(inEnd ? inEnd.value : '', '06:00');
-
-        return Promise.all([
-            saveColors,
-            view.prototype.handleSave.call(this, ev)
-        ]).then(function() {
-            var nightBody = [
-                'night_enabled=' + encodeURIComponent(nightEnabled),
-                'night_start=' + encodeURIComponent(nightStart),
-                'night_end=' + encodeURIComponent(nightEnd)
-            ].join('&');
-            return fetch('/cgi-bin/luci/admin/system/aw1k-led/save_night', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: nightBody
-            });
+            if (sel) uci.set('ledstatus', 'settings', k, sel.dataset.color);
         });
+
+        return view.prototype.handleSave.call(this, ev);
     },
 
     handleSaveApply: function(ev) {
         return this.handleSave(ev).then(function() {
-            /* Don't restart ledstatus if night mode is active — it would undo the night state */
-            return fetch('/cgi-bin/luci/admin/system/aw1k-led/restart_if_not_night', { method: 'POST' });
+            return ui.changes.apply();
         });
     },
 
@@ -436,16 +341,9 @@ return view.extend({
             color_sig_weak:      'red',
             color_sig_offline:   'magenta'
         };
-        var body = Object.keys(DEFAULTS).map(function(k) {
-            return encodeURIComponent(k) + '=' + encodeURIComponent(DEFAULTS[k]);
-        }).join('&');
-
-        return fetch('/cgi-bin/luci/admin/system/aw1k-led/save_colors', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: body
-        }).then(function() {
-            return view.prototype.handleReset.call(this, ev);
-        }.bind(this));
+        Object.keys(DEFAULTS).forEach(function(k) {
+            uci.set('ledstatus', 'settings', k, DEFAULTS[k]);
+        });
+        return view.prototype.handleReset.call(this, ev);
     }
 });

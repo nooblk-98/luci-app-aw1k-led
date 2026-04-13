@@ -4,6 +4,7 @@
 
 STATUS_LEDS="green:5g blue:5g red:5g green:internet green:wifi green:signal blue:signal red:signal"
 POWER_LED="/sys/class/leds/green:power"
+PHONE_LED="/sys/class/leds/green:phone"
 BLINK_PID="/tmp/led-night-blink.pid"
 NIGHT_ACTIVE_FLAG="/tmp/led-night-active"
 BLINK_MARKER="aw1k_led_night_blink"
@@ -24,11 +25,11 @@ is_night_active() {
     [ -f "$NIGHT_ACTIVE_FLAG" ]
 }
 
-# Airplane beacon: two quick blinks (150ms on, 150ms gap) then 3s off — runs in background
+# Phone LED slow blink during night mode — runs in background
 _start_blink() {
     python3 -c "
 import time
-LED = '/sys/class/leds/green:power'
+LED = '/sys/class/leds/green:phone'
 def w(f, v):
     open(LED + '/' + f, 'w').write(v)
 w('trigger', 'none')
@@ -46,38 +47,25 @@ _stop_blink() {
         kill "$(cat "$BLINK_PID")" 2>/dev/null
         rm -f "$BLINK_PID"
     fi
-
-    if command -v pgrep >/dev/null 2>&1; then
-        pgrep -f "$BLINK_MARKER" | while read -r pid; do
-            [ -n "$pid" ] && kill "$pid" 2>/dev/null
-        done
-        pgrep -f "/sys/class/leds/green:power" | while read -r pid; do
-            [ -n "$pid" ] && kill "$pid" 2>/dev/null
-        done
-    else
-        ps | grep "$BLINK_MARKER" | grep -v grep | awk '{print $1}' | while read -r pid; do
-            [ -n "$pid" ] && kill "$pid" 2>/dev/null
-        done
-        ps | grep "/sys/class/leds/green:power" | grep -v grep | awk '{print $1}' | while read -r pid; do
-            [ -n "$pid" ] && kill "$pid" 2>/dev/null
-        done
-    fi
-
-    rm -f "$BLINK_PID"
+    ps | grep "$BLINK_MARKER" | grep -v grep | awk '{print $1}' | while read -r pid; do
+        [ -n "$pid" ] && kill "$pid" 2>/dev/null
+    done
+    echo none > "$PHONE_LED/trigger"
+    echo 0    > "$PHONE_LED/brightness"
 }
 
 night_on() {
-    # Stop the LED status service so it won't override night LEDs
-    /etc/init.d/ledstatus stop 2>/dev/null
-
+    # Turn off all status LEDs
     for led in $STATUS_LEDS; do
         echo none > "/sys/class/leds/$led/trigger"
         echo 0    > "/sys/class/leds/$led/brightness"
     done
 
-    echo none > /sys/class/leds/green:phone/trigger
-    echo 0    > /sys/class/leds/green:phone/brightness
+    # Power LED stays on solid
+    echo none > "$POWER_LED/trigger"
+    echo 1    > "$POWER_LED/brightness"
 
+    # Phone LED blinks as night indicator
     _stop_blink
     _start_blink
     touch "$NIGHT_ACTIVE_FLAG"
@@ -89,13 +77,7 @@ night_off() {
     _stop_blink
     echo none > "$POWER_LED/trigger"
     echo 1    > "$POWER_LED/brightness"
-
     rm -f "$NIGHT_ACTIVE_FLAG"
-
-    # Restart normal LED service and refresh once
-    /etc/init.d/ledstatus start 2>/dev/null
-    /usr/bin/led-status-check.sh >/dev/null 2>&1
-
     logger -t led-night-mode "Night Mode deactivated"
 }
 
@@ -104,8 +86,8 @@ calc_window_state() {
     START="$1"
     END="$2"
 
-    valid_time "$START" || START="22:00"
-    valid_time "$END"   || END="06:00"
+    valid_time "$START" || START="21:00"
+    valid_time "$END"   || END="07:00"
 
     NOW_MINS=$(date +%H:%M | awk -F: '{print ($1+0) * 60 + ($2+0)}')
     START_MINS=$(time_to_mins "$START")

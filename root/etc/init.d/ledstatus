@@ -13,11 +13,12 @@ start_service() {
 
     [ "$enabled" = "0" ] && return 0
 
-    # Start night scheduler once at service boot if configured.
     if [ "$night_enabled" = "1" ]; then
         /usr/bin/led-night-mode.sh start-scheduler >/dev/null 2>&1
+        /usr/bin/led-night-mode.sh check >/dev/null 2>&1
     else
         /usr/bin/led-night-mode.sh stop-scheduler >/dev/null 2>&1
+        /usr/bin/led-night-mode.sh off >/dev/null 2>&1 &
     fi
 
     procd_open_instance
@@ -27,7 +28,7 @@ start_service() {
 }
 
 stop_service() {
-    :
+    /usr/bin/led-night-mode.sh stop-scheduler >/dev/null 2>&1
 }
 
 service_triggers() {

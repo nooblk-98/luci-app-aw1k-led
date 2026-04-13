@@ -29,10 +29,10 @@ define Package/$(PKG_NAME)/install
 	$(INSTALL_BIN) ./root/usr/bin/led-status-check-daemon.sh $(1)/usr/bin/led-status-check-daemon.sh
 
 	$(INSTALL_DIR) $(1)/usr/share/luci/menu.d
-	$(INSTALL_DATA) ./uci-defaults/luci-app-aw1k-led.json $(1)/usr/share/luci/menu.d/luci-app-aw1k-led.json
+	$(INSTALL_DATA) ./root/usr/share/luci/menu.d/luci-app-aw1k-led.json $(1)/usr/share/luci/menu.d/luci-app-aw1k-led.json
 
 	$(INSTALL_DIR) $(1)/usr/share/rpcd/acl.d
-	$(INSTALL_DATA) ./uci-defaults/luci-app-aw1k-led-acl.json $(1)/usr/share/rpcd/acl.d/luci-app-aw1k-led.json
+	$(INSTALL_DATA) ./root/usr/share/rpcd/acl.d/luci-app-aw1k-led.json $(1)/usr/share/rpcd/acl.d/luci-app-aw1k-led.json
 endef
 
 $(eval $(call BuildPackage,$(PKG_NAME)))
