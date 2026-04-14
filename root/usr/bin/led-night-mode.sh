@@ -1,6 +1,11 @@
 #!/bin/sh
-# AW1000 Night Mode controller
-# Usage: led-night-mode.sh on|off|check|start-scheduler|stop-scheduler|run-scheduler
+# AW1000 Night Mode controller (cron-based)
+# Usage: led-night-mode.sh on|off|enable|disable
+#
+#   on       — activate night mode now (LEDs off, power LED on)
+#   off      — deactivate night mode now (start LED service)
+#   enable   — save night_enabled=1, set crons, activate if in window
+#   disable  — save night_enabled=0, clear crons, restore LEDs
 
 STATUS_LEDS="green:5g blue:5g red:5g green:internet green:wifi green:signal blue:signal red:signal"
 POWER_LED="/sys/class/leds/green:power"
@@ -8,7 +13,7 @@ PHONE_LED="/sys/class/leds/green:phone"
 BLINK_PID="/tmp/led-night-blink.pid"
 NIGHT_ACTIVE_FLAG="/tmp/led-night-active"
 BLINK_MARKER="aw1k_led_night_blink"
-SCHED_PID="/tmp/led-night-scheduler.pid"
+CRON_TAG="# aw1k-night-mode"
 
 valid_time() {
     case "$1" in
@@ -78,125 +83,115 @@ night_off() {
     echo none > "$POWER_LED/trigger"
     echo 1    > "$POWER_LED/brightness"
     rm -f "$NIGHT_ACTIVE_FLAG"
+    # Restart LED service to restore normal LED behaviour
+    /etc/init.d/ledstatus restart >/dev/null 2>&1 &
     logger -t led-night-mode "Night Mode deactivated"
 }
 
-# Sets IN_WINDOW and NEXT_CHANGE_MINS globals
-calc_window_state() {
-    START="$1"
-    END="$2"
+# ── Cron management ──────────────────────────────────────────────────────────
 
-    valid_time "$START" || START="21:00"
-    valid_time "$END"   || END="07:00"
+# Remove all night-mode cron entries we own
+_clear_crons() {
+    local tmp
+    tmp=$(crontab -l 2>/dev/null | grep -v "$CRON_TAG")
+    echo "$tmp" | crontab -
+}
 
-    NOW_MINS=$(date +%H:%M | awk -F: '{print ($1+0) * 60 + ($2+0)}')
-    START_MINS=$(time_to_mins "$START")
-    END_MINS=$(time_to_mins "$END")
+# Add the two recurring crons (night_start → on, night_end → off)
+# cron format: minute hour * * * command
+_add_crons() {
+    local start="$1"   # HH:MM
+    local end="$2"     # HH:MM
 
-    if [ "$START_MINS" -eq "$END_MINS" ]; then
-        IN_WINDOW=0
-        NEXT_CHANGE_MINS=1440
-        return
-    fi
+    local s_min s_hour e_min e_hour
+    s_min=$(echo  "$start" | awk -F: '{printf "%d", $2}')
+    s_hour=$(echo "$start" | awk -F: '{printf "%d", $1}')
+    e_min=$(echo  "$end"   | awk -F: '{printf "%d", $2}')
+    e_hour=$(echo "$end"   | awk -F: '{printf "%d", $1}')
 
-    if [ "$START_MINS" -lt "$END_MINS" ]; then
-        # Same-day window
-        if [ "$NOW_MINS" -ge "$START_MINS" ] && [ "$NOW_MINS" -lt "$END_MINS" ]; then
-            IN_WINDOW=1
-            NEXT_CHANGE_MINS=$(( END_MINS - NOW_MINS ))
-        elif [ "$NOW_MINS" -lt "$START_MINS" ]; then
-            IN_WINDOW=0
-            NEXT_CHANGE_MINS=$(( START_MINS - NOW_MINS ))
-        else
-            IN_WINDOW=0
-            NEXT_CHANGE_MINS=$(( 1440 - NOW_MINS + START_MINS ))
-        fi
+    # at night_start → activate night mode
+    local cron_on="$s_min $s_hour * * * /usr/bin/led-night-mode.sh on $CRON_TAG"
+    # at night_end   → deactivate night mode (restarts LED service)
+    local cron_off="$e_min $e_hour * * * /usr/bin/led-night-mode.sh off $CRON_TAG"
+
+    local existing
+    existing=$(crontab -l 2>/dev/null | grep -v "$CRON_TAG")
+    printf '%s\n%s\n%s\n' "$existing" "$cron_on" "$cron_off" | \
+        grep -v '^$' | crontab -
+}
+
+# ── In-window check ──────────────────────────────────────────────────────────
+
+_in_window() {
+    local start="$1" end="$2"
+    local now start_m end_m now_m
+
+    now=$(date +%H:%M)
+    now_m=$(time_to_mins "$now")
+    start_m=$(time_to_mins "$start")
+    end_m=$(time_to_mins "$end")
+
+    [ "$start_m" -eq "$end_m" ] && return 1   # degenerate — never in window
+
+    if [ "$start_m" -lt "$end_m" ]; then
+        # Same-day window (e.g. 09:00–17:00)
+        [ "$now_m" -ge "$start_m" ] && [ "$now_m" -lt "$end_m" ] && return 0
     else
-        # Overnight window
-        if [ "$NOW_MINS" -ge "$START_MINS" ] || [ "$NOW_MINS" -lt "$END_MINS" ]; then
-            IN_WINDOW=1
-            if [ "$NOW_MINS" -lt "$END_MINS" ]; then
-                NEXT_CHANGE_MINS=$(( END_MINS - NOW_MINS ))
-            else
-                NEXT_CHANGE_MINS=$(( 1440 - NOW_MINS + END_MINS ))
-            fi
-        else
-            IN_WINDOW=0
-            NEXT_CHANGE_MINS=$(( START_MINS - NOW_MINS ))
-        fi
+        # Overnight window (e.g. 21:00–07:00)
+        { [ "$now_m" -ge "$start_m" ] || [ "$now_m" -lt "$end_m" ]; } && return 0
     fi
-
-    [ "$NEXT_CHANGE_MINS" -lt 1 ] && NEXT_CHANGE_MINS=1
+    return 1
 }
 
-check_schedule() {
-    ENABLED=$(uci get ledstatus.settings.night_enabled 2>/dev/null)
-    START=$(uci get ledstatus.settings.night_start 2>/dev/null)
-    END=$(uci get ledstatus.settings.night_end 2>/dev/null)
+# ── Public commands ──────────────────────────────────────────────────────────
 
-    if [ "$ENABLED" != "1" ]; then
-        is_night_active && night_off
-        return
+do_enable() {
+    local start end
+    start=$(uci get ledstatus.settings.night_start 2>/dev/null)
+    end=$(uci get ledstatus.settings.night_end   2>/dev/null)
+
+    valid_time "$start" || start="21:00"
+    valid_time "$end"   || end="07:00"
+
+    uci set ledstatus.settings.night_enabled=1
+    uci commit ledstatus
+
+    # Set up recurring crons
+    _clear_crons
+    _add_crons "$start" "$end"
+
+    # Activate immediately if we are currently inside the night window
+    if _in_window "$start" "$end"; then
+        night_on
     fi
 
-    calc_window_state "$START" "$END"
-
-    if [ "$IN_WINDOW" -eq 1 ]; then
-        is_night_active || night_on
-    else
-        is_night_active && night_off
-    fi
+    logger -t led-night-mode "Night Mode enabled (${start}–${end})"
 }
 
-run_scheduler() {
-    while true; do
-        ENABLED=$(uci get ledstatus.settings.night_enabled 2>/dev/null)
-        START=$(uci get ledstatus.settings.night_start 2>/dev/null)
-        END=$(uci get ledstatus.settings.night_end 2>/dev/null)
+do_disable() {
+    uci set ledstatus.settings.night_enabled=0
+    uci commit ledstatus
 
-        if [ "$ENABLED" != "1" ]; then
-            is_night_active && night_off
-            rm -f "$SCHED_PID"
-            exit 0
-        fi
+    # Remove all night-mode crons
+    _clear_crons
 
-        calc_window_state "$START" "$END"
-
-        if [ "$IN_WINDOW" -eq 1 ]; then
-            is_night_active || night_on
-        else
-            is_night_active && night_off
-        fi
-
-        sleep $(( NEXT_CHANGE_MINS * 60 ))
-    done
-}
-
-start_scheduler() {
-    if [ -f "$SCHED_PID" ] && kill -0 "$(cat "$SCHED_PID")" 2>/dev/null; then
-        return
+    # Restore LEDs if night mode was active
+    if is_night_active; then
+        _stop_blink
+        rm -f "$NIGHT_ACTIVE_FLAG"
+        /etc/init.d/ledstatus restart >/dev/null 2>&1 &
     fi
 
-    /usr/bin/led-night-mode.sh run-scheduler >/dev/null 2>&1 &
-    echo $! > "$SCHED_PID"
-}
-
-stop_scheduler() {
-    if [ -f "$SCHED_PID" ]; then
-        kill "$(cat "$SCHED_PID")" 2>/dev/null
-        rm -f "$SCHED_PID"
-    fi
+    logger -t led-night-mode "Night Mode disabled"
 }
 
 case "$1" in
-    on)              night_on ;;
-    off)             night_off ;;
-    check)           check_schedule ;;
-    run-scheduler)   run_scheduler ;;
-    start-scheduler) start_scheduler ;;
-    stop-scheduler)  stop_scheduler ;;
+    on)      night_on  ;;
+    off)     night_off ;;
+    enable)  do_enable  ;;
+    disable) do_disable ;;
     *)
-        echo "Usage: $0 on|off|check|start-scheduler|stop-scheduler|run-scheduler"
+        echo "Usage: $0 on|off|enable|disable"
         exit 1
         ;;
 esac

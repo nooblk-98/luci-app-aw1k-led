@@ -4,14 +4,16 @@
 		"read": {
 			"ubus": {
 				"uci": [ "get" ],
-				"service": [ "list" ]
+				"service": [ "list" ],
+				"luci.aw1k-led": [ "night_enable", "night_disable" ]
 			},
 			"uci": [ "ledstatus" ]
 		},
 		"write": {
 			"ubus": {
 				"uci": [ "set", "add", "delete", "apply", "confirm" ],
-				"service": [ "start", "stop", "restart" ]
+				"service": [ "start", "stop", "restart" ],
+				"luci.aw1k-led": [ "night_enable", "night_disable" ]
 			},
 			"uci": [ "ledstatus" ]
 		}

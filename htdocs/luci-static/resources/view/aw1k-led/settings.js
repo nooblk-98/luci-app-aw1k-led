@@ -193,11 +193,6 @@ return view.extend({
         /* ══════════════════════════════════════════════════════════════════
          * TAB: Night Mode
          * ══════════════════════════════════════════════════════════════════ */
-        o = s.taboption('nightmode', form.Flag, 'night_enabled',
-            _('Enable Night Mode'),
-            _('During the scheduled window all status LEDs turn off. The power LED slow-blinks like an airplane beacon.'));
-        o.rmempty = false; o.default = '0';
-
         o = s.taboption('nightmode', form.Value, 'night_start',
             _('Start time'), _('Night Mode begins at this time (HH:MM), e.g. 21:00'));
         o.placeholder = '21:00'; o.rmempty = false;
@@ -218,15 +213,27 @@ return view.extend({
             return true;
         };
 
+        o = s.taboption('nightmode', form.DummyValue, '_night_ctrl', _('Night Mode'));
+        o.rawhtml = true;
+        o.default = [
+            '<button type="button" class="btn cbi-button cbi-button-action" id="aw1k-night-enable-btn">',
+            _('Enable Night Mode'), '</button>',
+            '&nbsp;',
+            '<button type="button" class="btn cbi-button cbi-button-negative" id="aw1k-night-disable-btn">',
+            _('Disable Night Mode'), '</button>',
+            '<span id="aw1k-night-status" style="margin-left:12px;font-size:13px"></span>'
+        ].join('');
+
         o = s.taboption('nightmode', form.DummyValue, '_night_info', '');
         o.rawhtml = true;
         o.default = [
             '<div style="background:var(--color-bg-2,#f4f4f4);border-radius:8px;padding:12px 16px;margin:8px 0 0;font-size:13px">',
             '<b>' + _('Night Mode behaviour') + '</b><br>',
             '<ul style="margin:6px 0 0 16px;padding:0">',
-            '<li>' + _('All status LEDs (5G, Internet, WiFi, Signal) → OFF') + '</li>',
-            '<li>' + _('green:power → slow double-pulse beacon blink') + '</li>',
-            '<li>' + _('green:phone → OFF') + '</li>',
+            '<li>' + _('Enable: turns off all status LEDs, sets crons for daily schedule') + '</li>',
+            '<li>' + _('If current time is inside the night window, LEDs turn off immediately') + '</li>',
+            '<li>' + _('Disable: clears crons, restores LED service') + '</li>',
+            '<li>' + _('Power LED stays on solid. Phone LED slow-blinks during night') + '</li>',
             '</ul></div>'
         ].join('');
 
@@ -268,6 +275,25 @@ return view.extend({
         /* ════════════════════════════════════════════════════════════════════
          * RENDER + wire up interactive buttons
          * ════════════════════════════════════════════════════════════════════ */
+        var callInitAction = rpc.declare({
+            object: 'luci',
+            method: 'setInitAction',
+            params: ['name', 'action'],
+            expect: { result: false }
+        });
+
+        var callNightEnable = rpc.declare({
+            object: 'luci.aw1k-led',
+            method: 'night_enable',
+            expect: { '': {} }
+        });
+
+        var callNightDisable = rpc.declare({
+            object: 'luci.aw1k-led',
+            method: 'night_disable',
+            expect: { '': {} }
+        });
+
         return m.render().then(function(node) {
 
             window.awLkPick = function(el) {
@@ -290,11 +316,7 @@ return view.extend({
                     restartBtn.disabled = true;
                     restartStatus.textContent = _('Restarting…');
                     restartStatus.style.color = '#888';
-                    L.resolveDefault(rpc.declare({
-                        object: 'service',
-                        method: 'restart',
-                        params: ['name']
-                    })('ledstatus'), null).then(function() {
+                    callInitAction('ledstatus', 'restart').then(function() {
                         restartStatus.textContent = _('Restarted successfully.');
                         restartStatus.style.color = '#2dce89';
                     }).catch(function(e) {
@@ -303,6 +325,31 @@ return view.extend({
                     }).finally(function() { restartBtn.disabled = false; });
                 });
             }
+
+            /* ── Night Mode buttons ── */
+            var nightEnableBtn  = node.querySelector('#aw1k-night-enable-btn');
+            var nightDisableBtn = node.querySelector('#aw1k-night-disable-btn');
+            var nightStatus     = node.querySelector('#aw1k-night-status');
+
+            function nightModeCall(rpcFn, successMsg) {
+                nightEnableBtn.disabled  = true;
+                nightDisableBtn.disabled = true;
+                nightStatus.textContent  = _('Please wait…');
+                nightStatus.style.color  = '#888';
+                rpcFn().then(function() {
+                    nightStatus.textContent = successMsg;
+                    nightStatus.style.color = '#2dce89';
+                }).catch(function(e) {
+                    nightStatus.textContent = _('Error: ') + (e.message || e);
+                    nightStatus.style.color = '#f5365c';
+                }).finally(function() {
+                    nightEnableBtn.disabled  = false;
+                    nightDisableBtn.disabled = false;
+                });
+            }
+
+            if (nightEnableBtn)  nightEnableBtn.addEventListener('click',  function() { nightModeCall(callNightEnable,  _('Night Mode enabled. Crons set.')); });
+            if (nightDisableBtn) nightDisableBtn.addEventListener('click', function() { nightModeCall(callNightDisable, _('Night Mode disabled. LEDs restored.')); });
 
             return node;
         });
