@@ -1,8 +1,8 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-aw1k-led
-PKG_VERSION:=1.0.0
-PKG_RELEASE:=3
+PKG_VERSION:=1.0.1
+PKG_RELEASE:=0
 
 PKG_MAINTAINER:=NoobLk
 PKG_LICENSE:=GPL-3.0-or-later
